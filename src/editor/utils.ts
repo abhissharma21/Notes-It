@@ -1,10 +1,10 @@
-export function createBlock(
-  text = "",
-  type: "paragraph" | "heading" = "paragraph"
-) {
+import type { Block } from "./types";
+
+export function createBlock(overrides?: Partial<Block>): Block {
   return {
-    id: Math.random().toString(36).slice(2),
-    type,
-    text,
+    id: crypto.randomUUID(),
+    type: "paragraph",
+    text: "",
+    ...overrides,
   };
 }

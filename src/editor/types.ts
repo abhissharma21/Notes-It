@@ -9,11 +9,11 @@ export type BlockType =
   | "code"
   | "divider";
 
-export type Block = {
+export interface Block {
   id: string;
   type: BlockType;
   text: string;
-};
+}
 
 export type EditorState = {
   blocks: Block[];

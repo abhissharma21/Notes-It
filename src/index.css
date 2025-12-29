@@ -222,3 +222,49 @@ body {
 ::selection {
   background: rgba(46, 170, 220, 0.3);
 }
+
+.block-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.drag-handle {
+  opacity: 0;
+  cursor: grab;
+  padding-top: 6px;
+}
+
+.block-wrapper:hover .drag-handle {
+  opacity: 1;
+}
+
+.block {
+  min-height: 24px;
+  padding: 4px 0;
+  outline: none;
+}
+
+/* Placeholder only when focused */
+.block:empty::before {
+  content: attr(data-placeholder);
+  color: #888;
+  pointer-events: none;
+}
+
+.slash-menu {
+  position: absolute;
+  background: #111;
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.slash-item {
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.slash-item.active {
+  background: #333;
+}
