@@ -19,13 +19,17 @@ interface Props {
   onConvertBlock: (type: BlockType) => void;
   currentType: BlockType;
   onPreview: (type: BlockType | null) => void;
-
-  // NEW: Modes for Text vs Block actions
   mode?: "text" | "block";
   staticPosition?: { top: number; left: number } | null;
   onMerge?: () => void;
-  onSplit?: () => void;
+  onSplit?: (mode: "all" | "selection") => void;
   canSplit?: boolean;
+  splitInfo?: {
+    lineCount: number;
+    hasSelection: boolean;
+    isAllSelected?: boolean;
+    hasMultiLineSelection?: boolean;
+  };
 }
 
 export default function InlineToolbar({
@@ -37,6 +41,7 @@ export default function InlineToolbar({
   onMerge,
   onSplit,
   canSplit,
+  splitInfo,
 }: Props) {
   const [position, setPosition] = useState<{
     top: number;
@@ -48,25 +53,53 @@ export default function InlineToolbar({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // If we have a static position (for Block selection), use it directly
+    // 1. Handle Static Position (Block Mode)
     if (staticPosition) {
       setPosition(staticPosition);
       setIsVisible(true);
       return;
     }
 
-    // Otherwise, use Text Selection logic
+    // 2. Handle Text Selection / Split Logic
     function handleSelectionChange() {
-      if (mode === "block") return; // Don't use text selection logic in block mode
+      if (mode === "block") return;
 
       const selection = window.getSelection();
 
+      // CASE A: No active selection (collapsed cursor)
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+        // Smart Split: Show menu if cursor is inside a multi-line block
+        if (
+          splitInfo &&
+          splitInfo.lineCount > 1 &&
+          document.activeElement?.classList.contains("block")
+        ) {
+          const el = document.activeElement;
+          const rect = el.getBoundingClientRect();
+          let top = rect.top + window.scrollY - 50;
+          let left = rect.left + window.scrollX;
+
+          if (selection && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const cursorRect = range.getBoundingClientRect();
+            if (cursorRect.top > 0) {
+              top = cursorRect.top + window.scrollY - 40;
+              left = cursorRect.left + window.scrollX;
+            }
+          }
+
+          setPosition({ top, left });
+          setIsVisible(true);
+          return;
+        }
+
+        // Otherwise hide
         setIsVisible(false);
         setShowTextMenu(false);
         return;
       }
 
+      // CASE B: Active Text Selection
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
 
@@ -75,12 +108,11 @@ export default function InlineToolbar({
         return;
       }
 
-      const TOOLBAR_WIDTH = 280;
+      const TOOLBAR_WIDTH = 320;
       const GAP = 12;
 
       const spaceRight = window.innerWidth - rect.right;
-
-      let top = rect.top + window.scrollY - 8;
+      let top = rect.top + window.scrollY - 40;
       let left = 0;
 
       if (spaceRight > TOOLBAR_WIDTH + GAP) {
@@ -98,9 +130,21 @@ export default function InlineToolbar({
     }
 
     document.addEventListener("selectionchange", handleSelectionChange);
-    return () =>
+    document.addEventListener("keyup", handleSelectionChange);
+    document.addEventListener("mouseup", handleSelectionChange);
+    document.addEventListener("resize", handleSelectionChange);
+    document.addEventListener("scroll", handleSelectionChange);
+
+    handleSelectionChange();
+
+    return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
-  }, [mode, staticPosition]);
+      document.removeEventListener("keyup", handleSelectionChange);
+      document.removeEventListener("mouseup", handleSelectionChange);
+      document.removeEventListener("resize", handleSelectionChange);
+      document.removeEventListener("scroll", handleSelectionChange);
+    };
+  }, [mode, staticPosition, splitInfo]);
 
   function format(command: string, value?: string) {
     document.execCommand(command, false, value);
@@ -113,7 +157,7 @@ export default function InlineToolbar({
 
   if (!isVisible || !position) return null;
 
-  // --- Render Block Action Menu ---
+  // --- Render Block Mode Toolbar ---
   if (mode === "block") {
     return (
       <div
@@ -122,7 +166,6 @@ export default function InlineToolbar({
         onMouseDown={(e) => e.preventDefault()}
       >
         <div className="toolbar-section">
-          {/* Merge Button */}
           <button
             className="toolbar-btn"
             onClick={onMerge}
@@ -134,15 +177,14 @@ export default function InlineToolbar({
           </button>
         </div>
 
-        {/* Show Split only if allowed (e.g. single block selected with multiple lines) */}
         {canSplit && (
           <>
             <div className="toolbar-divider" />
             <div className="toolbar-section">
               <button
                 className="toolbar-btn"
-                onClick={onSplit}
-                title="Split into multiple blocks"
+                onClick={() => onSplit && onSplit("selection")}
+                title="Split block"
               >
                 <Split size={16} />
                 <span style={{ marginLeft: 4, fontSize: 13 }}>Split</span>
@@ -154,7 +196,15 @@ export default function InlineToolbar({
     );
   }
 
-  // --- Render Text Formatting Menu (Standard) ---
+  // --- Render Text Mode Toolbar ---
+
+  // Logic: Show split button ONLY if selection involves multiple lines (has <br> in it),
+  // OR if we are just clicking (caret) a block that has multiple lines.
+  const showSplitLines =
+    splitInfo &&
+    (splitInfo.hasMultiLineSelection ||
+      (!splitInfo.hasSelection && splitInfo.lineCount > 1));
+
   return (
     <div
       ref={menuRef}
@@ -180,7 +230,6 @@ export default function InlineToolbar({
               onClick={() => handleSelect("paragraph")}
               onHover={() => onPreview("paragraph")}
             />
-            {/* ... other dropdown items ... */}
             <DropdownItem
               label="Heading 1"
               icon={
@@ -247,12 +296,19 @@ export default function InlineToolbar({
         </button>
       </div>
 
-      {/* Option to split current block if it contains newlines, even in text mode? */}
-      {canSplit && (
+      {onSplit && showSplitLines && (
         <>
           <div className="toolbar-divider" />
-          <button className="toolbar-btn" onClick={onSplit} title="Split Block">
-            <Split size={16} />
+          <button
+            className="toolbar-btn"
+            onClick={() => onSplit("all")}
+            title="Split lines into individual blocks"
+            style={{ width: "auto", padding: "0 8px", gap: "6px" }}
+          >
+            <Split size={14} />
+            <span style={{ fontSize: "12px", fontWeight: 500 }}>
+              Split Lines
+            </span>
           </button>
         </>
       )}

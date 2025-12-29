@@ -23,13 +23,11 @@ export default function Editor() {
     saveSnapshot,
   } = useHistory<Block[]>([createBlock()]);
 
-  // --- UI State ---
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<BlockType | null>(null);
   const [mouseActive, setMouseActive] = useState(false);
 
-  // --- Multi-Selection State ---
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [selectionStartId, setSelectionStartId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -38,7 +36,18 @@ export default function Editor() {
     left: number;
   } | null>(null);
 
-  // --- Slash Menu State ---
+  const [splitInfo, setSplitInfo] = useState<{
+    lineCount: number;
+    hasSelection: boolean;
+    isAllSelected: boolean;
+    hasMultiLineSelection: boolean;
+  }>({
+    lineCount: 0,
+    hasSelection: false,
+    isAllSelected: false,
+    hasMultiLineSelection: false,
+  });
+
   const [slashMenu, setSlashMenu] = useState<{
     open: boolean;
     blockId: string | null;
@@ -60,11 +69,67 @@ export default function Editor() {
 
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
-  // --- Toolbar Positioning for Blocks ---
+  useEffect(() => {
+    const updateSplitInfo = () => {
+      const sel = window.getSelection();
+      const hasSelection =
+        !!sel && !sel.isCollapsed && sel.toString().length > 0;
+
+      let lineCount = 0;
+      let isAllSelected = false;
+      let hasMultiLineSelection = false;
+
+      if (focusedId) {
+        const block = flatBlocks.find((b) => b.id === focusedId);
+        if (block) {
+          const el = document.getElementById(focusedId);
+          const blockEl = el?.querySelector(".block");
+
+          if (blockEl) {
+            const html = blockEl.innerHTML;
+            const matches = html.match(/<br/g);
+            lineCount = matches ? matches.length + 1 : 1;
+
+            if (hasSelection && sel && sel.rangeCount > 0) {
+              const textLen = (blockEl as HTMLElement).innerText.length;
+              const selLen = sel.toString().length;
+              if (selLen >= textLen - 1 && textLen > 0) {
+                isAllSelected = true;
+              }
+
+              // Check if selection contains <br>
+              const range = sel.getRangeAt(0);
+              const fragment = range.cloneContents();
+              const div = document.createElement("div");
+              div.appendChild(fragment);
+              if (div.querySelector("br")) {
+                hasMultiLineSelection = true;
+              }
+            }
+          }
+        }
+      }
+      setSplitInfo({
+        lineCount,
+        hasSelection,
+        isAllSelected,
+        hasMultiLineSelection,
+      });
+    };
+
+    document.addEventListener("selectionchange", updateSplitInfo);
+    document.addEventListener("keyup", updateSplitInfo);
+    document.addEventListener("mouseup", updateSplitInfo);
+    updateSplitInfo();
+    return () => {
+      document.removeEventListener("selectionchange", updateSplitInfo);
+      document.removeEventListener("keyup", updateSplitInfo);
+      document.removeEventListener("mouseup", updateSplitInfo);
+    };
+  }, [focusedId, flatBlocks]);
+
   useEffect(() => {
     if (selectedIds.size > 0) {
-      // Find the DOM elements to calculate position
-      // We assume IDs match DOM IDs
       const ids = Array.from(selectedIds);
       let minTop = Infinity;
       let maxRight = -Infinity;
@@ -81,10 +146,9 @@ export default function Editor() {
       });
 
       if (found) {
-        // Position: Top-Right of the selection group, slightly offset
         setBlockToolbarPos({
           top: minTop + window.scrollY - 50,
-          left: maxRight + window.scrollX - 100, // Shift left to keep on screen
+          left: maxRight + window.scrollX - 100,
         });
       }
     } else {
@@ -92,7 +156,6 @@ export default function Editor() {
     }
   }, [selectedIds, blocks]);
 
-  // --- Global Event Listeners ---
   useEffect(() => {
     let timeout: number;
     function onMouseMove() {
@@ -145,68 +208,94 @@ export default function Editor() {
     };
   }, [undo, redo, selectedIds, flatBlocks]);
 
-  /* ---------- Actions ---------- */
   function deleteSelectedBlocks() {
     saveSnapshot();
     let newBlocks = blocks;
     selectedIds.forEach((id) => {
       newBlocks = deleteBlockFromTree(newBlocks, id);
     });
-    if (newBlocks.length === 0) newBlocks = [createBlock()];
+
+    if (newBlocks.length === 0) {
+      newBlocks = [createBlock()];
+    }
+
     setBlocks(newBlocks, false);
     setSelectedIds(new Set());
   }
 
   function mergeSelectedBlocks() {
     saveSnapshot();
-    // Get selected blocks in order
     const selected = flatBlocks.filter((b) => selectedIds.has(b.id));
     if (selected.length < 2) return;
 
     const first = selected[0];
-    const combinedText = selected.map((b) => b.text).join("<br>"); // Join with breaks
+    const combinedText = selected.map((b) => b.text).join("<br>");
 
-    // Update first block
     let newBlocks = updateBlockInTree(blocks, first.id, (b) => ({
       ...b,
       text: combinedText,
     }));
 
-    // Delete others
     for (let i = 1; i < selected.length; i++) {
       newBlocks = deleteBlockFromTree(newBlocks, selected[i].id);
     }
 
     setBlocks(newBlocks, false);
     setSelectedIds(new Set());
-    setFocusedId(first.id); // Focus the merged block
+    setFocusedId(first.id);
   }
 
-  function splitBlock() {
-    const targetId =
-      focusedId || (selectedIds.size === 1 ? Array.from(selectedIds)[0] : null);
-    if (!targetId) return;
-
-    const block = flatBlocks.find((b) => b.id === targetId);
+  function splitBlock(mode: "all" | "selection") {
+    if (!focusedId) return;
+    const block = flatBlocks.find((b) => b.id === focusedId);
     if (!block) return;
-
-    // Split by <br> tags (simple implementation)
-    // NOTE: This simple regex might need tuning for complex HTML, but works for basic <br> inserted by contentEditable
-    const parts = block.text
-      .split(/<br\s*\/?>/i)
-      .filter((p) => p.trim() !== "");
-
-    if (parts.length <= 1) return; // Nothing to split
 
     saveSnapshot();
 
-    // Update current block with first part
+    let parts: string[] = [];
+
+    if (mode === "selection") {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+
+        const fragment = range.extractContents();
+        const div = document.createElement("div");
+        div.appendChild(fragment);
+        const extractedHtml = div.innerHTML;
+
+        const blockEl = document.querySelector(`[id='${focusedId}'] .block`);
+        if (blockEl) {
+          const remainingHtml = blockEl.innerHTML;
+
+          let newBlocks = updateBlockInTree(blocks, focusedId, (b) => ({
+            ...b,
+            text: remainingHtml,
+          }));
+
+          const newBlock = createBlock({
+            text: extractedHtml,
+            type: block.type,
+          });
+          newBlocks = insertAfterInTree(newBlocks, focusedId, newBlock);
+
+          setBlocks(newBlocks, false);
+        }
+        return;
+      }
+    }
+
+    if (mode === "all") {
+      parts = block.text.split(/<br\s*\/?>/i).filter((p) => p.trim() !== "");
+    }
+
+    if (parts.length <= 1) return;
+
     let newBlocks = updateBlockInTree(blocks, block.id, (b) => ({
       ...b,
       text: parts[0],
     }));
 
-    // Insert remaining parts as new blocks
     let prevId = block.id;
     for (let i = 1; i < parts.length; i++) {
       const newBlock = createBlock({ text: parts[i], type: block.type });
@@ -215,10 +304,8 @@ export default function Editor() {
     }
 
     setBlocks(newBlocks, false);
-    setSelectedIds(new Set());
   }
 
-  // --- Block Selection Handlers ---
   function handleBlockMouseDown(id: string) {
     setIsMouseDown(true);
     setSelectionStartId(id);
@@ -230,15 +317,20 @@ export default function Editor() {
   function handleBlockMouseEnter(id: string) {
     if (isMouseDown && selectionStartId) {
       window.getSelection()?.removeAllRanges();
+
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
         setFocusedId(null);
       }
+
       const startIndex = flatBlocks.findIndex((b) => b.id === selectionStartId);
       const currentIndex = flatBlocks.findIndex((b) => b.id === id);
+
       if (startIndex === -1 || currentIndex === -1) return;
+
       const start = Math.min(startIndex, currentIndex);
       const end = Math.max(startIndex, currentIndex);
+
       const newSelection = new Set<string>();
       for (let i = start; i <= end; i++) {
         newSelection.add(flatBlocks[i].id);
@@ -247,7 +339,6 @@ export default function Editor() {
     }
   }
 
-  // --- General Updates ---
   function updateBlock(
     id: string,
     html: string,
@@ -255,11 +346,13 @@ export default function Editor() {
     el: HTMLDivElement
   ) {
     if (selectedIds.size > 0) setSelectedIds(new Set());
+
     const now = Date.now();
     if (now - lastSaveRef.current > 1000) {
       saveSnapshot();
       lastSaveRef.current = now;
     }
+
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({
       ...b,
       text: html,
@@ -304,10 +397,10 @@ export default function Editor() {
 
   function handleKeyDown(e: React.KeyboardEvent, id: string) {
     if (selectedIds.size > 0) setSelectedIds(new Set());
+
     const currentIndex = flatBlocks.findIndex((b) => b.id === id);
     const block = flatBlocks[currentIndex];
 
-    // Slash Menu
     if (slashMenu.open && id === slashMenu.blockId) {
       const filtered = COMMANDS.filter((c) =>
         c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
@@ -352,6 +445,7 @@ export default function Editor() {
       if (currentIndex < flatBlocks.length - 1)
         setFocusedId(flatBlocks[currentIndex + 1].id);
     }
+
     if (e.key === "Tab") {
       e.preventDefault();
       if (e.shiftKey) return;
@@ -369,6 +463,7 @@ export default function Editor() {
       }));
       setBlocks(newTree, false);
     }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       saveSnapshot();
@@ -387,6 +482,7 @@ export default function Editor() {
       setBlocks(newTree, false);
       setFocusedId(newBlock.id);
     }
+
     if (e.key === "Backspace") {
       const content = block.text.replace(/<[^>]*>/g, "").trim();
       if (content === "") {
@@ -451,22 +547,12 @@ export default function Editor() {
   const filteredCommands = COMMANDS.filter((c) =>
     c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
   );
+
   const currentBlock = flatBlocks.find((b) => b.id === focusedId);
   const currentType =
     currentBlock && previewType
       ? previewType
       : currentBlock?.type || "paragraph";
-
-  // Check split availability (single block selected or focused, containing <br>)
-  const targetSplitBlock = focusedId
-    ? flatBlocks.find((b) => b.id === focusedId)
-    : selectedIds.size === 1
-    ? flatBlocks.find((b) => b.id === Array.from(selectedIds)[0])
-    : null;
-
-  const canSplit = targetSplitBlock
-    ? targetSplitBlock.text.includes("<br")
-    : false;
 
   return (
     <div className="editor-container">
@@ -495,24 +581,16 @@ export default function Editor() {
         );
       })}
 
-      {/* 
-          TOOLBAR LOGIC:
-          1. If Multiple Blocks Selected -> Show Block Toolbar (Merge)
-          2. If Single Block Focused/Selected AND has line breaks -> Show Block Toolbar (Split) inside Text mode?
-          
-          We simply pass props to InlineToolbar to handle both via 'mode'.
-      */}
-
       {selectedIds.size > 0 ? (
         <InlineToolbar
-          onConvertBlock={() => {}} // No conversion in block mode yet
-          currentType="paragraph" // Dummy
+          onConvertBlock={() => {}}
+          currentType="paragraph"
           onPreview={() => {}}
           mode="block"
           staticPosition={blockToolbarPos}
           onMerge={selectedIds.size > 1 ? mergeSelectedBlocks : undefined}
-          onSplit={canSplit ? splitBlock : undefined}
-          canSplit={canSplit}
+          onSplit={splitBlock}
+          canSplit={false}
         />
       ) : (
         <InlineToolbar
@@ -520,7 +598,7 @@ export default function Editor() {
           currentType={currentType}
           onPreview={setPreviewType}
           mode="text"
-          canSplit={canSplit} // Allow splitting from text menu too if needed
+          splitInfo={splitInfo}
           onSplit={splitBlock}
         />
       )}
