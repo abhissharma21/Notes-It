@@ -6,7 +6,7 @@
 
   --menu-bg: #252525;
   --menu-border: #2f2f2f;
-  --menu-item-hover: #2f2f2f;
+  --menu-item-hover: #333333;
   --menu-item-active: #373737;
   --menu-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 
@@ -25,20 +25,23 @@ body {
   max-width: 800px;
   margin: 60px auto;
   padding: 0 40px;
-  /* Removed counter-reset here */
 }
 
-/* --- Block Wrappers --- */
+.tree-node {
+  width: 100%;
+}
+
+.block-children {
+  padding-left: 24px;
+  margin-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 .block-wrapper {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   margin: 2px 0;
-}
-.block-content-container {
-  flex: 1;
-  position: relative;
-  width: 100%;
 }
 
 .drag-handle {
@@ -53,14 +56,49 @@ body {
   color: var(--text-muted);
   border-radius: 4px;
   transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+/* 
+   Dynamic Handle Positioning 
+   This ensures the 6-dots align with the first line of text 
+   regardless of the block type.
+*/
+.wrapper-paragraph .drag-handle {
   margin-top: 4px;
 }
+.wrapper-h1 .drag-handle {
+  margin-top: 20px;
+} /* H1 padding-top 14px + font size offset */
+.wrapper-h2 .drag-handle {
+  margin-top: 14px;
+} /* H2 padding-top 10px */
+.wrapper-h3 .drag-handle {
+  margin-top: 8px;
+} /* H3 padding-top 6px */
+.wrapper-bullet-list .drag-handle {
+  margin-top: 4px;
+}
+.wrapper-numbered-list .drag-handle {
+  margin-top: 4px;
+}
+.wrapper-quote .drag-handle {
+  margin-top: 6px;
+}
+.wrapper-code .drag-handle {
+  margin-top: 24px;
+} /* Code padding-top is 24px */
+
 .drag-handle:hover {
   background-color: rgba(255, 255, 255, 0.05);
   color: var(--text-color);
 }
 
 /* --- Block Styling --- */
+.block-content-container {
+  flex: 1;
+  position: relative;
+  width: 100%;
+}
 .block {
   width: 100%;
   min-height: 1.5em;
@@ -70,7 +108,6 @@ body {
   word-break: break-word;
   position: relative;
 }
-
 .block-paragraph {
   font-size: 16px;
   line-height: 1.6;
@@ -90,7 +127,6 @@ body {
   font-weight: 600;
   padding-top: 6px;
 }
-
 .block-quote {
   border-left: 3px solid var(--text-muted);
   padding-left: 14px;
@@ -99,7 +135,6 @@ body {
   font-size: 18px;
   color: #ccc;
 }
-
 .block-code {
   font-family: "SF Mono", Consolas, monospace;
   font-size: 14px;
@@ -109,48 +144,35 @@ body {
   color: #d4d4d4;
   tab-size: 2;
 }
-
-/* --- Lists --- */
-/* Removed counter-reset logic */
-
 .block-bullet-list,
 .block-numbered-list {
   padding-left: 24px;
 }
-
-/* Bullet List Marker */
 .block-bullet-list::before {
   content: "•";
   position: absolute;
   left: 6px;
   color: var(--text-muted);
 }
-
-/* Numbered List Marker - Uses React-calculated number */
 .block-numbered-list::before {
-  content: attr(data-list-number) "."; /* Reads from attribute */
+  content: attr(data-list-number) ".";
   position: absolute;
   left: -4px;
   width: 24px;
   text-align: right;
   color: var(--text-muted);
 }
-
-/* --- Placeholders --- */
 .block:not(.block-bullet-list):not(.block-numbered-list):empty::before {
   content: attr(data-placeholder);
   color: #444;
   pointer-events: none;
 }
-
 .block-bullet-list:empty::after,
 .block-numbered-list:empty::after {
   content: attr(data-placeholder);
   color: #444;
   pointer-events: none;
 }
-
-/* --- Code Selector --- */
 .code-lang-selector {
   position: absolute;
   top: 4px;
@@ -168,6 +190,80 @@ body {
   padding-right: 16px;
   cursor: pointer;
   outline: none;
+}
+
+/* --- Inline Toolbar --- */
+.inline-toolbar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  background: var(--menu-bg);
+  padding: 4px;
+  border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+  z-index: 10000;
+  border: 1px solid var(--menu-border);
+  animation: fadeIn 0.15s ease-out;
+}
+.toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.toolbar-btn {
+  background: transparent;
+  border: none;
+  color: #ccc;
+  padding: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s ease;
+}
+.toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.text-dropdown-btn {
+  font-size: 14px;
+  padding: 6px 8px;
+  min-width: 60px;
+  justify-content: space-between;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #444;
+  margin: 0 6px;
+}
+.toolbar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 6px;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  width: 180px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* To push Check to right */
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: #d3d3d3;
+  font-size: 14px;
+}
+.dropdown-item:hover {
+  background: var(--menu-item-hover);
 }
 
 /* --- Slash Menu Styles (unchanged) --- */

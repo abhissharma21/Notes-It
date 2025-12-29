@@ -16,6 +16,8 @@ export interface Block {
   type: BlockType;
   text: string;
   language?: string;
+  children: Block[];
+  isOpen?: boolean;
 }
 
 export interface Command {
