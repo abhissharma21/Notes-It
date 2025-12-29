@@ -8,10 +8,13 @@ interface Props {
   isFocused: boolean;
   mouseActive: boolean;
 
+  // New prop
+  listNumber?: number;
+
   onInput: (index: number, text: string, el: HTMLDivElement) => void;
   onKeyDown: (e: React.KeyboardEvent, index: number) => void;
   onFocus: (index: number) => void;
-  onMetaChange: (index: number, changes: Partial<Block>) => void; // New prop
+  onMetaChange: (index: number, changes: Partial<Block>) => void;
 
   onDragStart: (index: number) => void;
   onDragOver: (index: number) => void;
@@ -19,8 +22,8 @@ interface Props {
 }
 
 const CODE_LANGUAGES = [
-  "JavaScript",
   "TypeScript",
+  "JavaScript",
   "Java",
   "Python",
   "Docker",
@@ -38,6 +41,7 @@ export default function Block({
   index,
   isFocused,
   mouseActive,
+  listNumber, // destructure
   onInput,
   onKeyDown,
   onFocus,
@@ -49,14 +53,12 @@ export default function Block({
   const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Mount text once
   useEffect(() => {
     if (ref.current) {
       ref.current.textContent = block.text;
     }
   }, []);
 
-  // Handle focus
   useEffect(() => {
     if (isFocused && ref.current) {
       ref.current.focus();
@@ -65,7 +67,7 @@ export default function Block({
 
   const showHandle = isHovered && mouseActive;
 
-  // Dynamic placeholder
+  // Dynamic placeholder logic
   let placeholder = "Type / for commands";
   if (block.type === "h1") placeholder = "Heading 1";
   if (block.type === "h2") placeholder = "Heading 2";
@@ -73,7 +75,7 @@ export default function Block({
   if (block.type === "bullet-list" || block.type === "numbered-list")
     placeholder = "List";
   if (block.type === "quote") placeholder = "Quote";
-  if (block.type === "code") placeholder = ""; // No placeholder for code, clear UI
+  if (block.type === "code") placeholder = "";
 
   return (
     <div
@@ -97,7 +99,6 @@ export default function Block({
       </div>
 
       <div className="block-content-container">
-        {/* Language Selector for Code Blocks */}
         {block.type === "code" && (
           <div className="code-lang-selector" contentEditable={false}>
             <select
@@ -105,7 +106,7 @@ export default function Block({
               onChange={(e) =>
                 onMetaChange(index, { language: e.target.value })
               }
-              onClick={(e) => e.stopPropagation()} // Prevent block focus logic
+              onClick={(e) => e.stopPropagation()}
             >
               {CODE_LANGUAGES.map((lang) => (
                 <option key={lang} value={lang}>
@@ -124,6 +125,8 @@ export default function Block({
           suppressContentEditableWarning
           spellCheck={false}
           data-placeholder={isFocused && !block.text ? placeholder : ""}
+          // Pass the number to CSS
+          data-list-number={listNumber}
           onInput={(e) =>
             onInput(index, e.currentTarget.textContent ?? "", e.currentTarget)
           }

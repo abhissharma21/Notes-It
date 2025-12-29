@@ -3,7 +3,7 @@ import Block from "./Block";
 import SlashMenu from "./SlashMenu";
 import { createBlock } from "./utils";
 import { COMMANDS } from "./commands";
-import type { Block as BlockType, Command } from "./types";
+import type { Block as BlockType } from "./types";
 
 export default function Editor() {
   const [blocks, setBlocks] = useState<BlockType[]>([createBlock()]);
@@ -57,17 +57,16 @@ export default function Editor() {
       const rect = el.getBoundingClientRect();
       slashBlockRef.current = el;
 
-      // Filter logic here to reset index if list changes
       const newQuery = text.slice(1);
 
-      setSlashMenu((s) => ({
+      setSlashMenu({
         open: true,
         blockIndex: index,
         query: newQuery,
-        selectedIndex: 0, // Always reset selection on type
+        selectedIndex: 0,
         x: rect.left,
         y: rect.bottom + 4,
-      }));
+      });
     } else {
       setSlashMenu((s) => ({ ...s, open: false }));
     }
@@ -87,7 +86,6 @@ export default function Editor() {
 
     // 1. Slash Menu Navigation
     if (slashMenu.open && index === slashMenu.blockIndex) {
-      // Calculate filtered commands to know boundaries
       const filtered = COMMANDS.filter((c) =>
         c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
       );
@@ -115,14 +113,9 @@ export default function Editor() {
       }
       if (e.key === "Enter") {
         if (filtered.length > 0) {
-          // Apply command
           e.preventDefault();
           applyCommand(filtered[slashMenu.selectedIndex].type);
         } else {
-          // No results found?
-          // "if i press enter keep that value there"
-          // We simply close the menu. Default enter behavior (newline) will occur
-          // unless we preventDefault. If we want to split the block, we allow default.
           setSlashMenu((s) => ({ ...s, open: false }));
         }
         return;
@@ -139,9 +132,26 @@ export default function Editor() {
       return;
     }
 
-    // 3. New Block (Enter)
+    // 3. New Block / Exit List (Enter)
     if (e.key === "Enter") {
       e.preventDefault();
+
+      // CHANGE: If block is empty and NOT a paragraph (e.g. List, Header),
+      // convert it to a normal paragraph instead of creating a new block.
+      if (block.text === "" && block.type !== "paragraph") {
+        setBlocks((prev) => {
+          const next = [...prev];
+          // Reset to paragraph and clear special metadata
+          next[index] = {
+            ...next[index],
+            type: "paragraph",
+            language: undefined,
+          };
+          return next;
+        });
+        return;
+      }
+
       insertBlockAfter(index);
       return;
     }
@@ -240,24 +250,36 @@ export default function Editor() {
     c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
   );
 
+  // --- List Number Calculation ---
+  let currentListNumber = 0;
+
   return (
     <div className="editor-container">
-      {blocks.map((block, index) => (
-        <Block
-          key={block.id}
-          block={block}
-          index={index}
-          isFocused={index === focusedIndex}
-          mouseActive={mouseActive}
-          onInput={updateBlock}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setFocusedIndex(index)}
-          onMetaChange={updateBlockMetadata}
-          onDragStart={() => handleDragStart(index)}
-          onDragOver={(e) => handleDragOver(e, index)}
-          onDrop={() => handleDrop(index)}
-        />
-      ))}
+      {blocks.map((block, index) => {
+        if (block.type === "numbered-list") {
+          currentListNumber++;
+        } else {
+          currentListNumber = 0;
+        }
+
+        return (
+          <Block
+            key={block.id}
+            block={block}
+            index={index}
+            isFocused={index === focusedIndex}
+            mouseActive={mouseActive}
+            listNumber={currentListNumber}
+            onInput={updateBlock}
+            onKeyDown={handleKeyDown}
+            onFocus={() => setFocusedIndex(index)}
+            onMetaChange={updateBlockMetadata}
+            onDragStart={() => handleDragStart(index)}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDrop={() => handleDrop(index)}
+          />
+        );
+      })}
 
       {slashMenu.open && (
         <SlashMenu

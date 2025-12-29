@@ -25,7 +25,7 @@ body {
   max-width: 800px;
   margin: 60px auto;
   padding: 0 40px;
-  counter-reset: editor-numbers;
+  /* Removed counter-reset here */
 }
 
 /* --- Block Wrappers --- */
@@ -111,22 +111,24 @@ body {
 }
 
 /* --- Lists --- */
-.block:not(.block-numbered-list) {
-  counter-reset: editor-numbers;
-}
+/* Removed counter-reset logic */
+
 .block-bullet-list,
 .block-numbered-list {
   padding-left: 24px;
 }
+
+/* Bullet List Marker */
 .block-bullet-list::before {
   content: "•";
   position: absolute;
   left: 6px;
   color: var(--text-muted);
 }
+
+/* Numbered List Marker - Uses React-calculated number */
 .block-numbered-list::before {
-  content: counter(editor-numbers) ".";
-  counter-increment: editor-numbers;
+  content: attr(data-list-number) "."; /* Reads from attribute */
   position: absolute;
   left: -4px;
   width: 24px;
@@ -134,7 +136,15 @@ body {
   color: var(--text-muted);
 }
 
-.block:empty::before {
+/* --- Placeholders --- */
+.block:not(.block-bullet-list):not(.block-numbered-list):empty::before {
+  content: attr(data-placeholder);
+  color: #444;
+  pointer-events: none;
+}
+
+.block-bullet-list:empty::after,
+.block-numbered-list:empty::after {
   content: attr(data-placeholder);
   color: #444;
   pointer-events: none;
@@ -160,10 +170,7 @@ body {
   outline: none;
 }
 
-/* =========================================
-   SLASH MENU REDESIGN
-   ========================================= */
-
+/* --- Slash Menu Styles (unchanged) --- */
 .slash-menu {
   position: absolute;
   background: var(--menu-bg);
@@ -175,10 +182,7 @@ body {
   flex-direction: column;
   padding: 4px;
   font-family: var(--font-family);
-  /* Ensure it doesn't run off screen */
 }
-
-/* 1. Header showing /Filter... */
 .slash-header {
   padding: 8px 12px;
   font-size: 14px;
@@ -187,11 +191,9 @@ body {
   margin-bottom: 4px;
 }
 .slash-header-text {
-  font-family: monospace; /* Mimic typing */
+  font-family: monospace;
   color: #999;
 }
-
-/* 2. Scrollable List */
 .slash-list {
   max-height: 300px;
   overflow-y: auto;
@@ -199,7 +201,6 @@ body {
   flex-direction: column;
   gap: 1px;
 }
-
 .slash-list::-webkit-scrollbar {
   width: 6px;
 }
@@ -207,7 +208,6 @@ body {
   background: #444;
   border-radius: 3px;
 }
-
 .slash-item {
   display: flex;
   align-items: center;
@@ -218,17 +218,14 @@ body {
   transition: background 0.05s ease;
   color: var(--text-color);
 }
-
 .slash-item.active {
   background: var(--menu-item-active);
 }
-
 .slash-item-left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
 .slash-icon {
   color: #fff;
   opacity: 0.8;
@@ -236,30 +233,25 @@ body {
   padding: 4px;
   border-radius: 4px;
   background: #333;
-  box-sizing: content-box; /* Ensures padding adds to size */
+  box-sizing: content-box;
   width: 16px;
   height: 16px;
 }
-
 .slash-item-label {
   font-size: 14px;
   font-weight: 500;
 }
-
 .slash-shortcut {
   font-size: 11px;
   color: #555;
   font-family: monospace;
 }
-
 .slash-empty {
   padding: 12px;
   font-size: 13px;
   color: #666;
   text-align: center;
 }
-
-/* 3. Footer */
 .slash-footer {
   border-top: 1px solid #333;
   margin-top: 4px;
@@ -269,25 +261,20 @@ body {
   font-size: 11px;
   color: #555;
 }
-
-/* 4. Preview Side Panel (Tooltip) */
-/* Positioned to the right of the slash menu */
 .slash-preview {
   position: absolute;
-  left: 100%; /* Right next to the menu */
+  left: 100%;
   top: 0;
   margin-left: 12px;
   width: 240px;
-  background: #252525; /* Same bg as menu container? Screenshot shows it specific */
+  background: #252525;
   border-radius: 6px;
   box-shadow: var(--menu-shadow);
   overflow: hidden;
-  /* Animate in */
   opacity: 0;
   animation: fadeIn 0.2s forwards;
-  pointer-events: none; /* Just visual */
+  pointer-events: none;
 }
-
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -298,10 +285,8 @@ body {
     transform: translateX(0);
   }
 }
-
-/* The top graphic area */
 .preview-graphic {
-  background: #ffffff; /* White paper look */
+  background: #ffffff;
   padding: 16px;
   min-height: 120px;
   display: flex;
@@ -309,8 +294,6 @@ body {
   justify-content: center;
   border-bottom: 1px solid #333;
 }
-
-/* The bottom description area */
 .preview-desc {
   background: #252525;
   padding: 12px;
@@ -335,8 +318,6 @@ body {
   font-size: 11px;
   line-height: 1.4;
 }
-
-/* Preview Specific Content Styles */
 .preview-text-sm {
   font-size: 8px;
   color: #000;
@@ -357,7 +338,6 @@ body {
   font-weight: 600;
   color: #000;
 }
-
 .preview-ul,
 .preview-ol {
   font-size: 10px;
