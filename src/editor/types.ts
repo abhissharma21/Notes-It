@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 export type BlockType =
   | "paragraph"
   | "h1"
@@ -13,17 +15,13 @@ export interface Block {
   id: string;
   type: BlockType;
   text: string;
+  language?: string;
 }
 
-export type EditorState = {
-  blocks: Block[];
-};
-
-export type CommandCategory = "Basic blocks" | "Headings" | "Media / Layout";
-
-export type Command = {
-  label: string;
+export interface Command {
   type: BlockType;
-  category: CommandCategory;
-  description?: string;
-};
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  shortcut?: string;
+}
