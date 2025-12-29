@@ -1,4 +1,3 @@
-/* --- Global Variables --- */
 :root {
   --bg-color: #0f0f0f;
   --text-color: #efefef;
@@ -24,23 +23,46 @@ body {
   counter-reset: editor-numbers;
 }
 
-/* --- Base Block Styles --- */
+.block-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  margin: 2px 0;
+}
+
+.drag-handle {
+  opacity: 0;
+  cursor: grab;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  border-radius: 4px;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.drag-handle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-color);
+}
+
 .block {
+  flex: 1;
   width: 100%;
   min-height: 1.5em;
   padding: 4px 8px;
-  margin: 2px 0;
   outline: none;
   white-space: pre-wrap;
   word-break: break-word;
   position: relative;
-
-  /* ANIMATION: This makes the text and the cursor grow/shrink smoothly */
   transition: font-size 0.2s ease-in-out, line-height 0.2s ease-in-out,
     padding 0.2s ease-in-out, color 0.2s ease-in-out;
 }
 
-/* --- Block Type Styles --- */
 .block-paragraph {
   font-size: 16px;
   line-height: 1.6;
@@ -50,21 +72,24 @@ body {
   font-size: 36px;
   font-weight: 700;
   line-height: 1.2;
-  margin-top: 0.5em;
+  padding-top: 12px;
+  padding-bottom: 4px;
 }
 
 .block-h2 {
   font-size: 28px;
   font-weight: 600;
   line-height: 1.3;
-  margin-top: 0.4em;
+  padding-top: 10px;
+  padding-bottom: 4px;
 }
 
 .block-h3 {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
-  margin-top: 0.3em;
+  padding-top: 8px;
+  padding-bottom: 4px;
 }
 
 .block-quote {
@@ -83,12 +108,10 @@ body {
   font-size: 14px;
 }
 
-/* --- Placeholder Logic --- */
 .block:empty::before {
   color: var(--text-muted);
   pointer-events: none;
   position: absolute;
-  /* Ensure placeholder also animates its size */
   transition: font-size 0.2s ease-in-out;
 }
 
@@ -96,7 +119,6 @@ body {
   content: "Type '/' for commands...";
 }
 
-/* Consolidated Headings Placeholder */
 .block-h1:empty::before,
 .block-h2:empty::before,
 .block-h3:empty::before {
@@ -110,7 +132,6 @@ body {
   content: "// Code block";
 }
 
-/* --- List Styles --- */
 .block:not(.block-numbered-list) {
   counter-reset: editor-numbers;
 }
@@ -144,7 +165,6 @@ body {
   pointer-events: none;
 }
 
-/* --- Slash Menu --- */
 .slash-menu {
   position: absolute;
   background: var(--menu-bg);
@@ -154,7 +174,6 @@ body {
   width: 260px;
   z-index: 1000;
   overflow: hidden;
-  /* Subtle fade in for menu */
   animation: menuIn 0.15s ease-out;
 }
 
@@ -169,102 +188,45 @@ body {
   }
 }
 
-.slash-scroll {
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 4px;
-}
 .slash-item {
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
+  color: var(--text-color);
 }
 .slash-item.active {
   background: rgba(46, 170, 220, 0.2);
 }
-.slash-item-label {
-  font-size: 14px;
-  font-weight: 500;
-}
-.slash-item-desc {
-  font-size: 11px;
-  color: #666;
-}
 
 .block-divider {
-  padding: 16px 0; /* Give the container some height */
-  margin: 4px 0;
+  padding: 16px 0;
   cursor: default;
   outline: none;
-  user-select: none; /* Prevent blue text selection on the divider itself */
+  user-select: none;
 }
 
-/* Ensure the divider line is actually visible */
 .divider-line {
   height: 1px;
-  background-color: #444; /* Distinct gray line */
+  background-color: #444;
   width: 100%;
   transition: background-color 0.2s ease;
 }
 
-/* When focused (selected with arrows), highlight the line */
 .block-divider.is-focused .divider-line {
   background-color: var(--accent);
-  box-shadow: 0 0 5px var(--accent); /* Optional: add a slight glow */
+  box-shadow: 0 0 5px var(--accent);
 }
 
-/* Fix for the blue selection/outline when clicking blocks */
 .block:focus {
   outline: none;
 }
 
-/* Prevent text selection color from looking messy on focus transitions */
 ::selection {
   background: rgba(46, 170, 220, 0.3);
 }
 
-.block-wrapper {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.drag-handle {
-  opacity: 0;
-  cursor: grab;
-  padding-top: 6px;
-}
-
-.block-wrapper:hover .drag-handle {
-  opacity: 1;
-}
-
-.block {
-  min-height: 24px;
-  padding: 4px 0;
-  outline: none;
-}
-
-/* Placeholder only when focused */
 .block:empty::before {
   content: attr(data-placeholder);
   color: #888;
   pointer-events: none;
-}
-
-.slash-menu {
-  position: absolute;
-  background: #111;
-  color: #fff;
-  border-radius: 6px;
-  padding: 4px;
-}
-
-.slash-item {
-  padding: 6px 10px;
-  border-radius: 4px;
-}
-
-.slash-item.active {
-  background: #333;
 }

@@ -1,5 +1,3 @@
-// src/editor/Block.tsx
-
 import { useEffect, useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
 import type { Block } from "./types";
@@ -35,14 +33,12 @@ export default function Block({
   const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Mount text once (DOM owns content)
   useEffect(() => {
     if (ref.current) {
       ref.current.textContent = block.text;
     }
   }, []);
 
-  // Editor-controlled caret
   useEffect(() => {
     if (isFocused && ref.current) {
       ref.current.focus();
@@ -57,7 +53,6 @@ export default function Block({
     }
   }, [isFocused]);
 
-  /* ✅ FINAL drag-handle rule */
   const showHandle = isHovered && mouseActive;
 
   return (
@@ -73,8 +68,12 @@ export default function Block({
       }}
       onDrop={onDrop}
     >
-      <div className="drag-handle" style={{ opacity: showHandle ? 1 : 0 }}>
-        <GripVertical size={16} />
+      <div
+        className="drag-handle"
+        contentEditable={false}
+        style={{ opacity: showHandle ? 1 : 0 }}
+      >
+        <GripVertical size={18} />
       </div>
 
       <div
