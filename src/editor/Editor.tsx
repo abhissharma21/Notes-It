@@ -8,11 +8,10 @@ import type { Block as BlockType } from "./types";
 
 export default function Editor() {
   const [blocks, setBlocks] = useState<BlockType[]>([createBlock()]);
-
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const [dragIndex, setDragIndex] = useState<number | null>(null); // ← new
 
   /* ---------- Mouse Activity (ONLY signal) ---------- */
-
   const [mouseActive, setMouseActive] = useState(false);
 
   useEffect(() => {
@@ -148,7 +147,7 @@ export default function Editor() {
       return next;
     });
 
-    setFocusedIndex(index - 1);
+    setFocusedIndex(Math.max(0, index - 1));
   }
 
   function applyCommand(type: BlockType["type"]) {
@@ -170,6 +169,36 @@ export default function Editor() {
     setSlashMenu((s) => ({ ...s, open: false }));
   }
 
+  /* ---------- Drag & Drop Handlers ---------- */
+
+  function handleDragStart(index: number) {
+    setDragIndex(index);
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) return;
+
+    // Optional: could show insertion line / highlight here
+  }
+
+  function handleDrop(index: number) {
+    if (dragIndex === null || dragIndex === index) {
+      setDragIndex(null);
+      return;
+    }
+
+    setBlocks((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(dragIndex, 1);
+      next.splice(index, 0, moved);
+      return next;
+    });
+
+    setDragIndex(null);
+    setFocusedIndex(index); // nice touch — focus dropped block
+  }
+
   const filteredCommands = COMMANDS.filter((c) =>
     c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
   );
@@ -185,10 +214,10 @@ export default function Editor() {
           mouseActive={mouseActive}
           onInput={updateBlock}
           onKeyDown={handleKeyDown}
-          onFocus={setFocusedIndex}
-          onDragStart={() => {}}
-          onDragOver={() => {}}
-          onDrop={() => {}}
+          onFocus={() => setFocusedIndex(index)}
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDrop={() => handleDrop(index)}
         />
       ))}
 
@@ -203,6 +232,7 @@ export default function Editor() {
               className={`slash-item ${
                 i === slashMenu.selectedIndex ? "active" : ""
               }`}
+              onClick={() => applyCommand(cmd.type)}
             >
               {cmd.label}
             </div>
