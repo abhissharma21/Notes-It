@@ -4,22 +4,24 @@ import type { Block, BlockType } from "./types";
 
 interface Props {
   block: Block;
-  // Index is now relative to siblings, not global
   index: number;
-  // We pass the focused ID to check focus, rather than a boolean
   focusedId: string | null;
+  selectedIds: Set<string>;
   mouseActive: boolean;
   listNumber?: number;
   previewType?: BlockType | null;
 
-  // Actions now take ID instead of Index
   onInput: (id: string, html: string, text: string, el: HTMLDivElement) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
   onFocus: (id: string) => void;
   onMetaChange: (id: string, changes: Partial<Block>) => void;
+
   onDragStart: (id: string) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
   onDrop: (targetId: string) => void;
+
+  onMouseDown: (id: string) => void;
+  onMouseEnter: (id: string) => void;
 }
 
 const CODE_LANGUAGES = [
@@ -41,6 +43,7 @@ export default function BlockComponent({
   block,
   index,
   focusedId,
+  selectedIds,
   mouseActive,
   listNumber,
   previewType,
@@ -51,13 +54,16 @@ export default function BlockComponent({
   onDragStart,
   onDragOver,
   onDrop,
+  onMouseDown,
+  onMouseEnter,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
   const isFocused = focusedId === block.id;
+  const isSelected = selectedIds.has(block.id);
 
-  // Determine display type (for previewing hover states)
   const displayType = isFocused && previewType ? previewType : block.type;
 
   useEffect(() => {
@@ -67,12 +73,10 @@ export default function BlockComponent({
   }, [block.text]);
 
   useEffect(() => {
-    if (isFocused && ref.current) {
+    if (isFocused && ref.current && !isSelected) {
       ref.current.focus();
-      // Keep cursor at end is usually default behavior for contentEditable focus in some browsers,
-      // but robust cursor management often needs explicit range handling (omitted for brevity).
     }
-  }, [isFocused]);
+  }, [isFocused, isSelected]);
 
   const showHandle = isHovered && mouseActive;
 
@@ -88,14 +92,19 @@ export default function BlockComponent({
   return (
     <div className="tree-node">
       <div
-        className={`block-wrapper wrapper-${displayType}`}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        draggable
-        onDragStart={(e) => {
-          e.stopPropagation();
-          onDragStart(block.id);
+        ref={wrapperRef}
+        // ADDED id here for DOM queries in Editor
+        id={block.id}
+        className={`block-wrapper wrapper-${displayType} ${
+          isSelected ? "selected" : ""
+        }`}
+        onMouseEnter={() => {
+          setIsHovered(true);
+          onMouseEnter(block.id);
         }}
+        onMouseLeave={() => setIsHovered(false)}
+        onMouseDown={() => onMouseDown(block.id)}
+        draggable={false}
         onDragOver={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -110,6 +119,14 @@ export default function BlockComponent({
           className="drag-handle"
           contentEditable={false}
           style={{ opacity: showHandle ? 1 : 0 }}
+          draggable={true}
+          onDragStart={(e) => {
+            e.stopPropagation();
+            onDragStart(block.id);
+            if (wrapperRef.current) {
+              e.dataTransfer.setDragImage(wrapperRef.current, 0, 0);
+            }
+          }}
         >
           <GripVertical size={18} />
         </div>
@@ -154,23 +171,17 @@ export default function BlockComponent({
             }
             onKeyDown={(e) => onKeyDown(e, block.id)}
             onFocus={() => {
-              // Only trigger focus if not already
               if (!isFocused) onFocus(block.id);
             }}
           />
         </div>
       </div>
 
-      {/* RECURSIVE CHILDREN RENDERING */}
       {block.children.length > 0 && block.isOpen && (
         <div className="block-children">
           {block.children.map((child, i) => {
-            // Basic list numbering for children
             let childListNum = 0;
             if (child.type === "numbered-list") {
-              // This logic is simplified; real numbering needs to check previous siblings in the child array
-              // For now, we just count index + 1 if previous was list.
-              // A proper implementation uses a reducer.
               childListNum = i + 1;
             }
 
@@ -180,9 +191,10 @@ export default function BlockComponent({
                 block={child}
                 index={i}
                 focusedId={focusedId}
+                selectedIds={selectedIds}
                 mouseActive={mouseActive}
                 listNumber={childListNum}
-                previewType={previewType} // Pass preview down
+                previewType={focusedId === block.id ? previewType : null}
                 onInput={onInput}
                 onKeyDown={onKeyDown}
                 onFocus={onFocus}
@@ -190,6 +202,8 @@ export default function BlockComponent({
                 onDragStart={onDragStart}
                 onDragOver={onDragOver}
                 onDrop={onDrop}
+                onMouseDown={onMouseDown}
+                onMouseEnter={onMouseEnter}
               />
             );
           })}

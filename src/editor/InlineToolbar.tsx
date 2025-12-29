@@ -10,19 +10,33 @@ import {
   ChevronDown,
   Type,
   Check,
+  Merge,
+  Split,
 } from "lucide-react";
-import type { BlockType } from "./types"; // BlockType is the union string
+import type { BlockType } from "./types";
 
 interface Props {
   onConvertBlock: (type: BlockType) => void;
   currentType: BlockType;
   onPreview: (type: BlockType | null) => void;
+
+  // NEW: Modes for Text vs Block actions
+  mode?: "text" | "block";
+  staticPosition?: { top: number; left: number } | null;
+  onMerge?: () => void;
+  onSplit?: () => void;
+  canSplit?: boolean;
 }
 
 export default function InlineToolbar({
   onConvertBlock,
   currentType,
   onPreview,
+  mode = "text",
+  staticPosition,
+  onMerge,
+  onSplit,
+  canSplit,
 }: Props) {
   const [position, setPosition] = useState<{
     top: number;
@@ -34,7 +48,17 @@ export default function InlineToolbar({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // If we have a static position (for Block selection), use it directly
+    if (staticPosition) {
+      setPosition(staticPosition);
+      setIsVisible(true);
+      return;
+    }
+
+    // Otherwise, use Text Selection logic
     function handleSelectionChange() {
+      if (mode === "block") return; // Don't use text selection logic in block mode
+
       const selection = window.getSelection();
 
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
@@ -76,7 +100,7 @@ export default function InlineToolbar({
     document.addEventListener("selectionchange", handleSelectionChange);
     return () =>
       document.removeEventListener("selectionchange", handleSelectionChange);
-  }, []);
+  }, [mode, staticPosition]);
 
   function format(command: string, value?: string) {
     document.execCommand(command, false, value);
@@ -89,6 +113,48 @@ export default function InlineToolbar({
 
   if (!isVisible || !position) return null;
 
+  // --- Render Block Action Menu ---
+  if (mode === "block") {
+    return (
+      <div
+        className="inline-toolbar"
+        style={{ top: position.top, left: position.left }}
+        onMouseDown={(e) => e.preventDefault()}
+      >
+        <div className="toolbar-section">
+          {/* Merge Button */}
+          <button
+            className="toolbar-btn"
+            onClick={onMerge}
+            title="Merge Blocks"
+            disabled={!onMerge}
+          >
+            <Merge size={16} />
+            <span style={{ marginLeft: 4, fontSize: 13 }}>Merge</span>
+          </button>
+        </div>
+
+        {/* Show Split only if allowed (e.g. single block selected with multiple lines) */}
+        {canSplit && (
+          <>
+            <div className="toolbar-divider" />
+            <div className="toolbar-section">
+              <button
+                className="toolbar-btn"
+                onClick={onSplit}
+                title="Split into multiple blocks"
+              >
+                <Split size={16} />
+                <span style={{ marginLeft: 4, fontSize: 13 }}>Split</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // --- Render Text Formatting Menu (Standard) ---
   return (
     <div
       ref={menuRef}
@@ -114,6 +180,7 @@ export default function InlineToolbar({
               onClick={() => handleSelect("paragraph")}
               onHover={() => onPreview("paragraph")}
             />
+            {/* ... other dropdown items ... */}
             <DropdownItem
               label="Heading 1"
               icon={
@@ -131,15 +198,6 @@ export default function InlineToolbar({
               isActive={currentType === "h2"}
               onClick={() => handleSelect("h2")}
               onHover={() => onPreview("h2")}
-            />
-            <DropdownItem
-              label="Heading 3"
-              icon={
-                <span style={{ fontWeight: "bold", fontSize: 12 }}>H3</span>
-              }
-              isActive={currentType === "h3"}
-              onClick={() => handleSelect("h3")}
-              onHover={() => onPreview("h3")}
             />
             <DropdownItem
               label="Bullet List"
@@ -188,6 +246,16 @@ export default function InlineToolbar({
           <Code size={16} />
         </button>
       </div>
+
+      {/* Option to split current block if it contains newlines, even in text mode? */}
+      {canSplit && (
+        <>
+          <div className="toolbar-divider" />
+          <button className="toolbar-btn" onClick={onSplit} title="Split Block">
+            <Split size={16} />
+          </button>
+        </>
+      )}
 
       <div className="toolbar-divider" />
 

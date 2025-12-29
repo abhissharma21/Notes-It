@@ -27,22 +27,27 @@ body {
   padding: 0 40px;
 }
 
-.tree-node {
-  width: 100%;
-}
-
-.block-children {
-  padding-left: 24px;
-  margin-left: 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
-}
-
+/* --- Block Wrappers & Handle Alignment --- */
 .block-wrapper {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 2px 0;
+  margin: 1px 0; /* Reduced margin for tighter feel */
+  padding: 2px 8px; /* Minimal padding */
+  border-radius: 4px;
+  /* Removed border and background transitions related to focus */
 }
+
+.block-wrapper.selected {
+  background-color: rgba(46, 170, 220, 0.2);
+  /* Optional: Hide text cursor or selection color changes */
+}
+
+.block-wrapper.selected *::selection {
+  background: transparent;
+}
+
+/* REMOVED: .block-wrapper.focused style */
 
 .drag-handle {
   opacity: 0;
@@ -56,25 +61,22 @@ body {
   color: var(--text-muted);
   border-radius: 4px;
   transition: opacity 0.2s ease, background-color 0.2s ease;
+  /* IMPORTANT: pointer-events auto allows clicking/dragging the handle */
+  pointer-events: auto;
 }
 
-/* 
-   Dynamic Handle Positioning 
-   This ensures the 6-dots align with the first line of text 
-   regardless of the block type.
-*/
 .wrapper-paragraph .drag-handle {
   margin-top: 4px;
 }
 .wrapper-h1 .drag-handle {
   margin-top: 20px;
-} /* H1 padding-top 14px + font size offset */
+}
 .wrapper-h2 .drag-handle {
   margin-top: 14px;
-} /* H2 padding-top 10px */
+}
 .wrapper-h3 .drag-handle {
   margin-top: 8px;
-} /* H3 padding-top 6px */
+}
 .wrapper-bullet-list .drag-handle {
   margin-top: 4px;
 }
@@ -86,7 +88,7 @@ body {
 }
 .wrapper-code .drag-handle {
   margin-top: 24px;
-} /* Code padding-top is 24px */
+}
 
 .drag-handle:hover {
   background-color: rgba(255, 255, 255, 0.05);
@@ -192,6 +194,16 @@ body {
   outline: none;
 }
 
+/* --- TREE STRUCTURE --- */
+.tree-node {
+  width: 100%;
+}
+.block-children {
+  padding-left: 24px;
+  margin-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 /* --- Inline Toolbar --- */
 .inline-toolbar {
   position: absolute;
@@ -255,7 +267,7 @@ body {
 .dropdown-item {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* To push Check to right */
+  justify-content: space-between;
   gap: 10px;
   padding: 8px 12px;
   cursor: pointer;
@@ -266,7 +278,7 @@ body {
   background: var(--menu-item-hover);
 }
 
-/* --- Slash Menu Styles (unchanged) --- */
+/* --- Slash Menu --- */
 .slash-menu {
   position: absolute;
   background: var(--menu-bg);
