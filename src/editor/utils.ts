@@ -13,7 +13,6 @@ export function createBlock(overrides?: Partial<Block>): Block {
 
 // --- Tree Helpers ---
 
-// Flattens tree into a linear list (for keyboard navigation: Up/Down)
 export function flattenBlocks(blocks: Block[]): Block[] {
   return blocks.reduce((acc: Block[], block) => {
     acc.push(block);
@@ -24,7 +23,6 @@ export function flattenBlocks(blocks: Block[]): Block[] {
   }, []);
 }
 
-// Find a block and its parent path by ID
 export function findNodePath(
   blocks: Block[],
   id: string,
@@ -43,7 +41,6 @@ export function findNodePath(
   return null;
 }
 
-// Immutable update of a specific block deep in the tree
 export function updateBlockInTree(
   blocks: Block[],
   id: string,
@@ -63,7 +60,6 @@ export function updateBlockInTree(
   });
 }
 
-// Delete a node
 export function deleteBlockFromTree(blocks: Block[], id: string): Block[] {
   return blocks
     .filter((b) => b.id !== id)
@@ -73,7 +69,6 @@ export function deleteBlockFromTree(blocks: Block[], id: string): Block[] {
     }));
 }
 
-// Insert a node after a specific ID
 export function insertAfterInTree(
   blocks: Block[],
   anchorId: string,
@@ -85,18 +80,46 @@ export function insertAfterInTree(
     if (block.id === anchorId) {
       newBlocks.push(newBlock);
     } else if (block.children.length > 0) {
-      // Recurse, but don't mutate the pushed block directly, copy it
       const updatedChildren = insertAfterInTree(
         block.children,
         anchorId,
         newBlock
       );
       if (updatedChildren !== block.children) {
-        // Replace the last pushed block with the updated one
         newBlocks[newBlocks.length - 1] = {
           ...block,
           children: updatedChildren,
         };
+      }
+    }
+  }
+  return newBlocks;
+}
+
+export function insertBeforeInTree(
+  blocks: Block[],
+  anchorId: string,
+  newBlock: Block
+): Block[] {
+  const newBlocks: Block[] = [];
+  for (const block of blocks) {
+    if (block.id === anchorId) {
+      newBlocks.push(newBlock);
+      newBlocks.push(block);
+    } else {
+      newBlocks.push(block);
+      if (block.children.length > 0) {
+        const updatedChildren = insertBeforeInTree(
+          block.children,
+          anchorId,
+          newBlock
+        );
+        if (updatedChildren !== block.children) {
+          newBlocks[newBlocks.length - 1] = {
+            ...block,
+            children: updatedChildren,
+          };
+        }
       }
     }
   }

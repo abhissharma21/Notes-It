@@ -11,6 +11,9 @@ interface Props {
   listNumber?: number;
   previewType?: BlockType | null;
 
+  // Prop for Drag & Drop Visuals
+  dropTarget: { id: string; pos: "top" | "bottom" } | null;
+
   onInput: (id: string, html: string, text: string, el: HTMLDivElement) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
   onFocus: (id: string) => void;
@@ -47,6 +50,7 @@ export default function BlockComponent({
   mouseActive,
   listNumber,
   previewType,
+  dropTarget,
   onInput,
   onKeyDown,
   onFocus,
@@ -63,6 +67,8 @@ export default function BlockComponent({
 
   const isFocused = focusedId === block.id;
   const isSelected = selectedIds.has(block.id);
+  const isDropTarget = dropTarget?.id === block.id;
+  const dropPos = isDropTarget ? dropTarget.pos : null;
 
   const displayType = isFocused && previewType ? previewType : block.type;
 
@@ -90,10 +96,28 @@ export default function BlockComponent({
   if (displayType === "code") placeholder = "";
 
   return (
-    <div className="tree-node">
+    <div className="tree-node" style={{ position: "relative" }}>
+      {/* Visual Drop Line Indicator */}
+      {isDropTarget && (
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            height: "2px",
+            backgroundColor: "#2eaadc",
+            pointerEvents: "none",
+            zIndex: 50,
+            top: dropPos === "top" ? "-1px" : "auto",
+            bottom: dropPos === "bottom" ? "-1px" : "auto",
+            borderRadius: "1px",
+            boxShadow: "0 0 4px #2eaadc",
+          }}
+        />
+      )}
+
       <div
         ref={wrapperRef}
-        // ADDED id here for DOM queries in Editor
         id={block.id}
         className={`block-wrapper wrapper-${displayType} ${
           isSelected ? "selected" : ""
@@ -106,8 +130,7 @@ export default function BlockComponent({
         onMouseDown={() => onMouseDown(block.id)}
         draggable={false}
         onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
+          // Pass event to Editor to calculate top/bottom split
           onDragOver(e, block.id);
         }}
         onDrop={(e) => {
@@ -195,6 +218,7 @@ export default function BlockComponent({
                 mouseActive={mouseActive}
                 listNumber={childListNum}
                 previewType={focusedId === block.id ? previewType : null}
+                dropTarget={dropTarget}
                 onInput={onInput}
                 onKeyDown={onKeyDown}
                 onFocus={onFocus}

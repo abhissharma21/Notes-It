@@ -8,11 +8,30 @@ import {
   findNodePath,
   updateBlockInTree,
   insertAfterInTree,
+  insertBeforeInTree, // NEW IMPORT
   deleteBlockFromTree,
 } from "./utils";
 import { COMMANDS } from "./commands";
 import type { Block, BlockType } from "./types";
 import { useHistory } from "../hooks/useHistory";
+
+// Helper to get top-level selected blocks to avoid duplicating children
+function getTopLevelSelectedBlocks(
+  blocks: Block[],
+  selectedIds: Set<string>
+): Block[] {
+  const result: Block[] = [];
+  for (const block of blocks) {
+    if (selectedIds.has(block.id)) {
+      result.push(block);
+    } else {
+      if (block.children.length > 0) {
+        result.push(...getTopLevelSelectedBlocks(block.children, selectedIds));
+      }
+    }
+  }
+  return result;
+}
 
 export default function Editor() {
   const {
@@ -23,11 +42,18 @@ export default function Editor() {
     saveSnapshot,
   } = useHistory<Block[]>([createBlock()]);
 
+  // --- UI State ---
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    pos: "top" | "bottom";
+  } | null>(null);
+
   const [previewType, setPreviewType] = useState<BlockType | null>(null);
   const [mouseActive, setMouseActive] = useState(false);
 
+  // --- Multi-Selection State ---
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [selectionStartId, setSelectionStartId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -36,6 +62,7 @@ export default function Editor() {
     left: number;
   } | null>(null);
 
+  // --- Split Info State ---
   const [splitInfo, setSplitInfo] = useState<{
     lineCount: number;
     hasSelection: boolean;
@@ -48,6 +75,7 @@ export default function Editor() {
     hasMultiLineSelection: false,
   });
 
+  // --- Slash Menu State ---
   const [slashMenu, setSlashMenu] = useState<{
     open: boolean;
     blockId: string | null;
@@ -69,6 +97,50 @@ export default function Editor() {
 
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
+  // --- Global Event Listeners ---
+  useEffect(() => {
+    function onWindowMouseDown(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (
+        target.closest(".block-wrapper") ||
+        target.closest(".inline-toolbar") ||
+        target.closest(".slash-menu")
+      ) {
+        return;
+      }
+      if (selectedIds.size > 0) setSelectedIds(new Set());
+      if (focusedId) setFocusedId(null);
+    }
+
+    function onMouseUp() {
+      setIsMouseDown(false);
+    }
+
+    function onDragEnd() {
+      setIsMouseDown(false);
+      setSelectionStartId(null);
+      setDragId(null);
+      setDropTarget(null); // Clear drop indicator
+    }
+
+    function onMouseMove() {
+      setMouseActive(true);
+    }
+
+    window.addEventListener("mousedown", onWindowMouseDown);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("dragend", onDragEnd);
+
+    return () => {
+      window.removeEventListener("mousedown", onWindowMouseDown);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("dragend", onDragEnd);
+    };
+  }, [selectedIds, focusedId]);
+
+  // --- Split Info ---
   useEffect(() => {
     const updateSplitInfo = () => {
       const sel = window.getSelection();
@@ -84,27 +156,21 @@ export default function Editor() {
         if (block) {
           const el = document.getElementById(focusedId);
           const blockEl = el?.querySelector(".block");
-
           if (blockEl) {
             const html = blockEl.innerHTML;
             const matches = html.match(/<br/g);
             lineCount = matches ? matches.length + 1 : 1;
-
             if (hasSelection && sel && sel.rangeCount > 0) {
               const textLen = (blockEl as HTMLElement).innerText.length;
               const selLen = sel.toString().length;
               if (selLen >= textLen - 1 && textLen > 0) {
                 isAllSelected = true;
               }
-
-              // Check if selection contains <br>
               const range = sel.getRangeAt(0);
               const fragment = range.cloneContents();
               const div = document.createElement("div");
               div.appendChild(fragment);
-              if (div.querySelector("br")) {
-                hasMultiLineSelection = true;
-              }
+              if (div.querySelector("br")) hasMultiLineSelection = true;
             }
           }
         }
@@ -128,13 +194,13 @@ export default function Editor() {
     };
   }, [focusedId, flatBlocks]);
 
+  // --- Toolbar Positioning ---
   useEffect(() => {
     if (selectedIds.size > 0) {
       const ids = Array.from(selectedIds);
       let minTop = Infinity;
       let maxRight = -Infinity;
       let found = false;
-
       ids.forEach((id) => {
         const el = document.getElementById(id);
         if (el) {
@@ -144,7 +210,6 @@ export default function Editor() {
           found = true;
         }
       });
-
       if (found) {
         setBlockToolbarPos({
           top: minTop + window.scrollY - 50,
@@ -156,20 +221,13 @@ export default function Editor() {
     }
   }, [selectedIds, blocks]);
 
+  // --- Keyboard & Copy ---
   useEffect(() => {
-    let timeout: number;
-    function onMouseMove() {
-      setMouseActive(true);
-      clearTimeout(timeout);
-      timeout = window.setTimeout(() => setMouseActive(false), 800);
-    }
-
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       }
-
       if (
         selectedIds.size > 0 &&
         (e.key === "Backspace" || e.key === "Delete")
@@ -178,11 +236,6 @@ export default function Editor() {
         deleteSelectedBlocks();
       }
     }
-
-    function onMouseUp() {
-      setIsMouseDown(false);
-    }
-
     function onCopy(e: ClipboardEvent) {
       if (selectedIds.size > 0) {
         e.preventDefault();
@@ -193,32 +246,22 @@ export default function Editor() {
         e.clipboardData?.setData("text/plain", selectedContent);
       }
     }
-
-    window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mouseup", onMouseUp);
     document.addEventListener("copy", onCopy);
-
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("copy", onCopy);
-      clearTimeout(timeout);
     };
   }, [undo, redo, selectedIds, flatBlocks]);
 
+  /* ---------- Block Actions ---------- */
   function deleteSelectedBlocks() {
     saveSnapshot();
     let newBlocks = blocks;
     selectedIds.forEach((id) => {
       newBlocks = deleteBlockFromTree(newBlocks, id);
     });
-
-    if (newBlocks.length === 0) {
-      newBlocks = [createBlock()];
-    }
-
+    if (newBlocks.length === 0) newBlocks = [createBlock()];
     setBlocks(newBlocks, false);
     setSelectedIds(new Set());
   }
@@ -227,19 +270,15 @@ export default function Editor() {
     saveSnapshot();
     const selected = flatBlocks.filter((b) => selectedIds.has(b.id));
     if (selected.length < 2) return;
-
     const first = selected[0];
     const combinedText = selected.map((b) => b.text).join("<br>");
-
     let newBlocks = updateBlockInTree(blocks, first.id, (b) => ({
       ...b,
       text: combinedText,
     }));
-
     for (let i = 1; i < selected.length; i++) {
       newBlocks = deleteBlockFromTree(newBlocks, selected[i].id);
     }
-
     setBlocks(newBlocks, false);
     setSelectedIds(new Set());
     setFocusedId(first.id);
@@ -249,36 +288,29 @@ export default function Editor() {
     if (!focusedId) return;
     const block = flatBlocks.find((b) => b.id === focusedId);
     if (!block) return;
-
     saveSnapshot();
-
     let parts: string[] = [];
 
     if (mode === "selection") {
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
         const range = sel.getRangeAt(0);
-
         const fragment = range.extractContents();
         const div = document.createElement("div");
         div.appendChild(fragment);
         const extractedHtml = div.innerHTML;
-
         const blockEl = document.querySelector(`[id='${focusedId}'] .block`);
         if (blockEl) {
           const remainingHtml = blockEl.innerHTML;
-
           let newBlocks = updateBlockInTree(blocks, focusedId, (b) => ({
             ...b,
             text: remainingHtml,
           }));
-
           const newBlock = createBlock({
             text: extractedHtml,
             type: block.type,
           });
           newBlocks = insertAfterInTree(newBlocks, focusedId, newBlock);
-
           setBlocks(newBlocks, false);
         }
         return;
@@ -290,22 +322,20 @@ export default function Editor() {
     }
 
     if (parts.length <= 1) return;
-
     let newBlocks = updateBlockInTree(blocks, block.id, (b) => ({
       ...b,
       text: parts[0],
     }));
-
     let prevId = block.id;
     for (let i = 1; i < parts.length; i++) {
       const newBlock = createBlock({ text: parts[i], type: block.type });
       newBlocks = insertAfterInTree(newBlocks, prevId, newBlock);
       prevId = newBlock.id;
     }
-
     setBlocks(newBlocks, false);
   }
 
+  /* ---------- Handlers ---------- */
   function handleBlockMouseDown(id: string) {
     setIsMouseDown(true);
     setSelectionStartId(id);
@@ -314,23 +344,23 @@ export default function Editor() {
     }
   }
 
+  function handleBlockFocus(id: string) {
+    setFocusedId(id);
+    if (selectedIds.size > 0) setSelectedIds(new Set());
+  }
+
   function handleBlockMouseEnter(id: string) {
     if (isMouseDown && selectionStartId) {
       window.getSelection()?.removeAllRanges();
-
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
         setFocusedId(null);
       }
-
       const startIndex = flatBlocks.findIndex((b) => b.id === selectionStartId);
       const currentIndex = flatBlocks.findIndex((b) => b.id === id);
-
       if (startIndex === -1 || currentIndex === -1) return;
-
       const start = Math.min(startIndex, currentIndex);
       const end = Math.max(startIndex, currentIndex);
-
       const newSelection = new Set<string>();
       for (let i = start; i <= end; i++) {
         newSelection.add(flatBlocks[i].id);
@@ -346,19 +376,16 @@ export default function Editor() {
     el: HTMLDivElement
   ) {
     if (selectedIds.size > 0) setSelectedIds(new Set());
-
     const now = Date.now();
     if (now - lastSaveRef.current > 1000) {
       saveSnapshot();
       lastSaveRef.current = now;
     }
-
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({
       ...b,
       text: html,
     }));
     setBlocks(newBlocks, false);
-
     if (text.startsWith("/")) {
       const rect = el.getBoundingClientRect();
       slashBlockRef.current = el;
@@ -397,7 +424,6 @@ export default function Editor() {
 
   function handleKeyDown(e: React.KeyboardEvent, id: string) {
     if (selectedIds.size > 0) setSelectedIds(new Set());
-
     const currentIndex = flatBlocks.findIndex((b) => b.id === id);
     const block = flatBlocks[currentIndex];
 
@@ -445,7 +471,6 @@ export default function Editor() {
       if (currentIndex < flatBlocks.length - 1)
         setFocusedId(flatBlocks[currentIndex + 1].id);
     }
-
     if (e.key === "Tab") {
       e.preventDefault();
       if (e.shiftKey) return;
@@ -463,7 +488,6 @@ export default function Editor() {
       }));
       setBlocks(newTree, false);
     }
-
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       saveSnapshot();
@@ -482,7 +506,6 @@ export default function Editor() {
       setBlocks(newTree, false);
       setFocusedId(newBlock.id);
     }
-
     if (e.key === "Backspace") {
       const content = block.text.replace(/<[^>]*>/g, "").trim();
       if (content === "") {
@@ -528,19 +551,108 @@ export default function Editor() {
 
   function handleDragStart(id: string) {
     setDragId(id);
+    if (!selectedIds.has(id)) {
+      setSelectedIds(new Set());
+    }
   }
+
   function handleDragOver(e: React.DragEvent, id: string) {
     e.preventDefault();
+    e.stopPropagation();
+
+    // Calculate drop position (Top vs Bottom)
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const pos = y < rect.height / 2 ? "top" : "bottom";
+
+    setDropTarget({ id, pos });
   }
+
   function handleDrop(targetId: string) {
-    if (!dragId || dragId === targetId) return;
+    setIsMouseDown(false);
+    setSelectionStartId(null);
+    setDropTarget(null); // Clear indicator immediately
+
+    if (!dragId) return;
+
+    // Use current dropTarget state if available for position, else default to bottom
+    // We captured it in handleDragOver
+    const targetPos = dropTarget?.id === targetId ? dropTarget.pos : "bottom";
+
     saveSnapshot();
-    const sourceRes = findNodePath(blocks, dragId);
-    if (!sourceRes) return;
-    let newTree = deleteBlockFromTree(blocks, dragId);
-    newTree = insertAfterInTree(newTree, targetId, sourceRes.node);
+
+    // 1. Prepare list of blocks to move
+    let blocksToMove: Block[] = [];
+    if (selectedIds.has(dragId) && selectedIds.size > 0) {
+      if (selectedIds.has(targetId)) {
+        setDragId(null);
+        return;
+      }
+      blocksToMove = getTopLevelSelectedBlocks(blocks, selectedIds);
+    } else {
+      if (dragId === targetId) {
+        setDragId(null);
+        return;
+      }
+      const sourceRes = findNodePath(blocks, dragId);
+      if (sourceRes) blocksToMove = [sourceRes.node];
+    }
+
+    if (blocksToMove.length === 0) {
+      setDragId(null);
+      return;
+    }
+
+    // 2. Remove from tree
+    let newTree = blocks;
+    blocksToMove.forEach((b) => {
+      newTree = deleteBlockFromTree(newTree, b.id);
+    });
+
+    // 3. Insert at target
+    // We reverse if inserting 'top' so they stack correctly (optional depending on UX preference)
+    // But usually iterating forward is fine.
+    // If 'top', we insertBefore. If we have multiple, we insert them one by one.
+    // To keep order:
+    //   Insert Block A before Target -> [A, Target]
+    //   Insert Block B before Target -> [A, B, Target]? No, InsertBefore inserts strictly before anchor.
+    //   Actually, if we iterate [A, B] and insert A before Target, then B before Target, we get [A, B, Target].
+    //   Wait:
+    //   Start: [Target]
+    //   Insert A before Target: [A, Target]
+    //   Insert B before Target: [A, B, Target] -> Yes.
+
+    // If 'bottom', we insertAfter.
+    //   Start: [Target]
+    //   Insert A after Target: [Target, A]
+    //   Insert B after Target: [Target, B, A] -> NO.
+    //   To keep [A, B] order when inserting after:
+    //   Insert A after Target -> Anchor becomes A.
+    //   Insert B after A.
+
+    let anchorId = targetId;
+
+    if (targetPos === "top") {
+      // Insert BEFORE logic
+      // We iterate normally. Each insert puts it before the CURRENT anchor (targetId).
+      // But wait, if we insert A before T => A, T.
+      // Next insert B before T => A, B, T.
+      // Order preserved.
+      blocksToMove.forEach((b) => {
+        newTree = insertBeforeInTree(newTree, targetId, b);
+      });
+    } else {
+      // Insert AFTER logic
+      // We need to update anchorId so they chain.
+      blocksToMove.forEach((b) => {
+        newTree = insertAfterInTree(newTree, anchorId, b);
+        anchorId = b.id;
+      });
+    }
+
     setBlocks(newTree, false);
     setDragId(null);
+    setSelectedIds(new Set());
     setFocusedId(dragId);
   }
 
@@ -568,9 +680,10 @@ export default function Editor() {
             mouseActive={mouseActive}
             listNumber={listNum}
             previewType={focusedId === block.id ? previewType : null}
+            dropTarget={dropTarget}
             onInput={updateBlock}
             onKeyDown={handleKeyDown}
-            onFocus={setFocusedId}
+            onFocus={handleBlockFocus}
             onMetaChange={updateBlockMetadata}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
