@@ -46,6 +46,21 @@ body {
   background: transparent;
 }
 
+.typing-mode .drag-handle {
+  opacity: 0 !important;
+  pointer-events: none; /* Prevent accidental clicks while typing */
+}
+
+/* 2. Hide handles when editor lost focus (user clicked sidebar/outside) */
+.editor-container:not(:focus-within) .drag-handle {
+  opacity: 0 !important;
+}
+
+/* Ensure hover still works otherwise */
+.block-wrapper:hover .drag-handle {
+  opacity: 1; /* This will be overridden by the rules above if typing/blurred */
+}
+
 .drag-handle {
   opacity: 0;
   cursor: grab;

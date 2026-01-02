@@ -9,7 +9,7 @@ import {
   insertAfterInTree,
   deleteBlockFromTree,
   getTextLength,
-  sanitizeBlock, // <--- Ensure this is imported
+  sanitizeBlock,
   normalizeEditorState,
 } from "../utils";
 import { COMMANDS } from "../commands";
@@ -57,10 +57,18 @@ export default function Editor() {
     y: 0,
   });
 
+  // --- NEW: Typing Mode State ---
+  const [isTyping, setIsTyping] = useState(false);
+
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
-  // Close menu on click outside
+  // Global Listeners
   useEffect(() => {
+    // 1. Mouse Move -> Stop Typing Mode (Show handles again)
+    function onMouseMove() {
+      if (isTyping) setIsTyping(false);
+    }
+
     function onWindowClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (slashMenu.open && !target.closest(".slash-menu")) {
@@ -71,17 +79,22 @@ export default function Editor() {
       setDragId(null);
       setDropTarget(null);
     }
+
+    window.addEventListener("mousemove", onMouseMove); // Listen for mouse movement
     window.addEventListener("mousedown", onWindowClick);
     document.addEventListener("dragend", onDragEnd);
     return () => {
+      window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mousedown", onWindowClick);
       document.removeEventListener("dragend", onDragEnd);
     };
-  }, [slashMenu.open]);
+  }, [slashMenu.open, isTyping]);
 
-  // Undo/Redo
   useEffect(() => {
     function onWindowKeyDown(e: KeyboardEvent) {
+      // 2. Key Down -> Enter Typing Mode (Hide handles)
+      if (!isTyping) setIsTyping(true);
+
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -89,8 +102,9 @@ export default function Editor() {
     }
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, isTyping]);
 
+  // ... (Keep update handlers) ...
   const handleUpdateContent = (id: string, content: InlineNode[]) => {
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, content }));
     setBlocks(newBlocks, false);
@@ -174,7 +188,6 @@ export default function Editor() {
     const currentIndex = flatBlocks.findIndex((b) => b.id === id);
     const block = flatBlocks[currentIndex];
 
-    // Slash Menu KeyNav
     if (slashMenu.open && slashMenu.blockId === id) {
       const filtered = COMMANDS.filter((c) =>
         c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
@@ -280,7 +293,6 @@ export default function Editor() {
     let newType: BlockType = cmdType as BlockType;
     let newProps: any = {};
 
-    // Translate old command types to new schema
     if (cmdType === "h1") {
       newType = "heading";
       newProps = { level: 1 };
@@ -304,11 +316,10 @@ export default function Editor() {
     }
 
     const newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
-      // Merge props so we don't lose anything important
       const updated = {
         ...b,
         type: newType,
-        content: [], // Clear slash text
+        content: [],
         props: { ...b.props, ...newProps },
       };
       return sanitizeBlock(updated);
@@ -317,13 +328,14 @@ export default function Editor() {
     setBlocks(newBlocks, false);
     setSlashMenu((s) => ({ ...s, open: false }));
 
-    // FORCE FOCUS by resetting selection state to trigger effects
-    setFocusedId(slashMenu.blockId);
-    setSelection({
-      start: { blockId: slashMenu.blockId, offset: 0 },
-      end: { blockId: slashMenu.blockId, offset: 0 },
-      isCollapsed: true,
-    });
+    setTimeout(() => {
+      setFocusedId(slashMenu.blockId);
+      setSelection({
+        start: { blockId: slashMenu.blockId!, offset: 0 },
+        end: { blockId: slashMenu.blockId!, offset: 0 },
+        isCollapsed: true,
+      });
+    }, 0);
   };
 
   const handleDragStart = (id: string) => setDragId(id);
@@ -358,13 +370,16 @@ export default function Editor() {
 
   let listCounter = 0;
 
+  // --- Add "typing-mode" class based on state ---
   return (
-    <div className="editor-container">
+    <div className={`editor-container ${isTyping ? "typing-mode" : ""}`}>
       {blocks.map((block, index) => {
-        if (block.type === "numbered-list") listCounter++;
-        else listCounter = 0;
+        if (block.type === "numbered-list") {
+          listCounter++;
+        } else {
+          listCounter = 0;
+        }
 
-        // Determine if menu is open for THIS block
         const isMenuOpenForBlock =
           slashMenu.open && slashMenu.blockId === block.id;
 
@@ -381,7 +396,7 @@ export default function Editor() {
                 ? selection.start.offset
                 : null
             }
-            isSlashMenuOpen={isMenuOpenForBlock} // <--- Pass this prop
+            isSlashMenuOpen={isMenuOpenForBlock}
             onUpdateContent={handleUpdateContent}
             onUpdateMetadata={handleUpdateMetadata}
             onSelectionChange={handleSelectionChange}
