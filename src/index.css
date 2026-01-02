@@ -32,22 +32,18 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 1px 0; /* Reduced margin for tighter feel */
-  padding: 2px 8px; /* Minimal padding */
+  margin: 1px 0;
+  padding: 2px 8px;
   border-radius: 4px;
-  /* Removed border and background transitions related to focus */
 }
 
 .block-wrapper.selected {
   background-color: rgba(46, 170, 220, 0.2);
-  /* Optional: Hide text cursor or selection color changes */
 }
 
 .block-wrapper.selected *::selection {
   background: transparent;
 }
-
-/* REMOVED: .block-wrapper.focused style */
 
 .drag-handle {
   opacity: 0;
@@ -61,7 +57,6 @@ body {
   color: var(--text-muted);
   border-radius: 4px;
   transition: opacity 0.2s ease, background-color 0.2s ease;
-  /* IMPORTANT: pointer-events auto allows clicking/dragging the handle */
   pointer-events: auto;
 }
 
@@ -69,10 +64,10 @@ body {
   margin-top: 4px;
 }
 .wrapper-h1 .drag-handle {
-  margin-top: 20px;
-}
-.wrapper-h2 .drag-handle {
   margin-top: 14px;
+} /* Adjusted for new padding */
+.wrapper-h2 .drag-handle {
+  margin-top: 10px;
 }
 .wrapper-h3 .drag-handle {
   margin-top: 8px;
@@ -87,7 +82,7 @@ body {
   margin-top: 6px;
 }
 .wrapper-code .drag-handle {
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .drag-handle:hover {
@@ -96,39 +91,66 @@ body {
 }
 
 /* --- Block Styling --- */
+
 .block-content-container {
   flex: 1;
-  position: relative;
+  position: relative; /* Anchor for absolute elements */
   width: 100%;
 }
+
 .block {
   width: 100%;
-  min-height: 1.5em;
+  min-height: 24px;
   padding: 4px 0;
   outline: none;
   white-space: pre-wrap;
   word-break: break-word;
   position: relative;
+  line-height: 1.6;
+  caret-color: var(--text-color);
+
+  /* --- FLUID ANIMATION --- */
+  /* This animates the font-size/weight change */
+  transition: font-size 0.2s ease-out, font-weight 0.2s ease-out,
+    padding 0.2s ease;
 }
+
+/* --- PLACEHOLDER LOGIC (The Fix) --- */
+/* We use data-placeholder attribute controlled by React */
+.block::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #555;
+  pointer-events: none; /* Allows clicks to pass through to the <br> */
+  font-style: normal;
+  display: block;
+  width: 100%;
+  padding: 4px 0; /* Match padding of .block to align text perfectly */
+}
+
+/* Typography */
 .block-paragraph {
   font-size: 16px;
-  line-height: 1.6;
 }
 .block-h1 {
   font-size: 30px;
   font-weight: 700;
-  padding-top: 14px;
+  padding-top: 10px;
 }
 .block-h2 {
   font-size: 24px;
   font-weight: 600;
-  padding-top: 10px;
+  padding-top: 8px;
 }
 .block-h3 {
   font-size: 20px;
   font-weight: 600;
   padding-top: 6px;
 }
+
+/* Quote */
 .block-quote {
   border-left: 3px solid var(--text-muted);
   padding-left: 14px;
@@ -137,43 +159,26 @@ body {
   font-size: 18px;
   color: #ccc;
 }
+/* Indent placeholder for quote */
+.block-quote::before {
+  left: 14px;
+}
+
+/* Code */
 .block-code {
   font-family: "SF Mono", Consolas, monospace;
   font-size: 14px;
   background: #1e1e1e;
-  padding: 24px 16px 16px;
+  padding: 16px;
   border-radius: 6px;
   color: #d4d4d4;
   tab-size: 2;
 }
-.block-bullet-list,
-.block-numbered-list {
-  padding-left: 24px;
-}
-.block-bullet-list::before {
-  content: "•";
-  position: absolute;
-  left: 6px;
-  color: var(--text-muted);
-}
-.block-numbered-list::before {
-  content: attr(data-list-number) ".";
-  position: absolute;
-  left: -4px;
-  width: 24px;
-  text-align: right;
-  color: var(--text-muted);
-}
-.block:not(.block-bullet-list):not(.block-numbered-list):empty::before {
-  content: attr(data-placeholder);
-  color: #444;
-  pointer-events: none;
-}
-.block-bullet-list:empty::after,
-.block-numbered-list:empty::after {
-  content: attr(data-placeholder);
-  color: #444;
-  pointer-events: none;
+/* Indent placeholder for code */
+.block-code::before {
+  left: 16px;
+  top: 16px;
+  padding: 0;
 }
 .code-lang-selector {
   position: absolute;
@@ -192,6 +197,49 @@ body {
   padding-right: 16px;
   cursor: pointer;
   outline: none;
+}
+
+/* Lists */
+.block-bullet-list,
+.block-numbered-list {
+  padding-left: 0;
+}
+
+/* Visual Bullet */
+.wrapper-bullet-list .block-content-container::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1.6;
+  pointer-events: none;
+}
+
+.wrapper-bullet-list .block-content-container::before,
+.wrapper-numbered-list .block-content-container::before {
+  display: none;
+}
+
+/* Visual Number (Static for CSS, Dynamic if using React) */
+.wrapper-numbered-list .block-content-container::before {
+  content: "1.";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 20px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.6;
+  pointer-events: none;
+}
+
+/* Indent placeholder for lists so it doesn't overlap bullet */
+.block-bullet-list::before,
+.block-numbered-list::before {
+  left: 0; /* Align with text start */
 }
 
 /* --- TREE STRUCTURE --- */
@@ -473,4 +521,70 @@ body {
   width: 100%;
   height: 1px;
   background: #ccc;
+}
+
+.custom-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  width: 200px;
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  overflow: hidden;
+  animation: fadeIn 0.1s ease-out;
+}
+
+.dropdown-search {
+  padding: 8px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dropdown-search input {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+  width: 100%;
+}
+
+.dropdown-search input::placeholder {
+  color: #666;
+}
+
+.dropdown-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for dropdown */
+.dropdown-list::-webkit-scrollbar {
+  width: 4px;
+}
+.dropdown-list::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 2px;
+}
+
+.dropdown-option {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #ccc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dropdown-option:hover {
+  background: #333;
+  color: #fff;
 }

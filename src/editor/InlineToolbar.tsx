@@ -13,7 +13,7 @@ import {
   Merge,
   Split,
 } from "lucide-react";
-import type { BlockType } from "./types";
+import type { BlockType } from "../types";
 
 interface Props {
   onConvertBlock: (type: BlockType) => void;

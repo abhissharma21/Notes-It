@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
+import { getPreview } from "../commands";
 import type { Command } from "./types";
-import { getPreview } from "./commands";
 
 interface Props {
   position: { x: number; y: number };
