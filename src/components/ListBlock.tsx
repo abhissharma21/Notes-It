@@ -5,13 +5,12 @@ import { useBlockLogic } from "../hooks/useBlockLogic";
 
 interface Props {
   block: Block;
-  listNumber: number; // Received from Editor.tsx loop
+  listNumber: number;
   isFocused: boolean;
   caretOffset: number | null;
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   onSelectionChange: (id: string, offset: number) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
-  isSlashMenuOpen: boolean;
 }
 
 export default function ListBlock(props: Props) {
@@ -23,7 +22,6 @@ export default function ListBlock(props: Props) {
     onUpdateContent,
     onSelectionChange,
     onKeyDown,
-    isSlashMenuOpen,
   } = props;
 
   const { contentRef, handleInput } = useBlockLogic({
@@ -31,20 +29,16 @@ export default function ListBlock(props: Props) {
     isFocused,
     caretOffset,
     onUpdateContent,
-    isSlashMenuOpen,
   });
 
   const isEmpty = block.content.length === 0;
-
-  // Stable key prevents shaking. Only update if empty state changes (for placeholder)
   const renderKey = isEmpty ? "empty" : "content";
-
   const isOrdered = block.type === "numbered-list";
 
   return (
     <div
       className={`block-list-container ${block.type}`}
-      style={{ display: "flex", alignItems: "flex-start", padding: "2px 0" }}
+      style={{ display: "flex", alignItems: "flex-start" }}
     >
       {/* Marker */}
       <div
@@ -52,13 +46,15 @@ export default function ListBlock(props: Props) {
         style={{
           userSelect: "none",
           width: "24px",
-          marginRight: "8px", // Added spacing
+          marginRight: "8px",
           textAlign: "right",
           color: "#666",
           flexShrink: 0,
           lineHeight: "1.6",
           fontSize: "16px",
           fontWeight: 500,
+          // FIX: Add padding to match the text block's padding (defined in CSS as 4px)
+          paddingTop: "4px",
         }}
       >
         {isOrdered ? `${listNumber}.` : "•"}

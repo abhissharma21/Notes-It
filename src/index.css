@@ -25,6 +25,7 @@ body {
   max-width: 800px;
   margin: 60px auto;
   padding: 0 40px;
+  position: relative;
 }
 
 /* --- Block Wrappers & Handle Alignment --- */
@@ -60,29 +61,38 @@ body {
   pointer-events: auto;
 }
 
-.wrapper-paragraph .drag-handle {
-  margin-top: 4px;
-}
-.wrapper-h1 .drag-handle {
-  margin-top: 14px;
-} /* Adjusted for new padding */
-.wrapper-h2 .drag-handle {
-  margin-top: 10px;
-}
-.wrapper-h3 .drag-handle {
-  margin-top: 8px;
-}
-.wrapper-bullet-list .drag-handle {
-  margin-top: 4px;
-}
+.wrapper-paragraph .drag-handle,
+.wrapper-bullet-list .drag-handle,
 .wrapper-numbered-list .drag-handle {
   margin-top: 4px;
 }
+
+/* Headings - Pushed down to match larger font center */
+.wrapper-h1 .drag-handle {
+  margin-top: 18px; /* (10px padding + 30px font-half) - 12px handle-half */
+}
+
+.wrapper-h2 .drag-handle {
+  margin-top: 14px; /* (8px padding + 24px font-half) - 12px handle-half */
+}
+
+.wrapper-h3 .drag-handle {
+  margin-top: 10px; /* (6px padding + 20px font-half) - 12px handle-half */
+}
+
+/* Quote - Aligns with the slightly larger/italic text */
 .wrapper-quote .drag-handle {
   margin-top: 6px;
 }
+
+/* Code - Aligns with the Toolbar Header */
 .wrapper-code .drag-handle {
-  margin-top: 16px;
+  margin-top: 2px; /* Aligns with the language dropdown toolbar */
+}
+
+/* Divider - Centers on the line */
+.wrapper-divider .drag-handle {
+  margin-top: 12px;
 }
 
 .drag-handle:hover {
