@@ -1,19 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import BlockComponent from "../components/Block";
 import SlashMenu from "../components/SlashMenu";
+import InlineToolbar from "./InlineToolbar";
 import {
   createBlock,
   flattenBlocks,
   findNodePath,
   updateBlockInTree,
   insertAfterInTree,
+  insertBeforeInTree,
   deleteBlockFromTree,
   getTextLength,
   sanitizeBlock,
   normalizeEditorState,
+  toggleMarkInRange,
 } from "../utils";
 import { COMMANDS } from "../commands";
-import type { Block, BlockType, InlineNode, EditorSelection } from "../types";
+import type {
+  Block,
+  BlockType,
+  InlineNode,
+  EditorSelection,
+  MarkType,
+} from "../types";
 import { useHistory } from "../hooks/useHistory";
 
 const getPlainText = (content: InlineNode[]) =>
@@ -57,18 +66,10 @@ export default function Editor() {
     y: 0,
   });
 
-  // --- NEW: Typing Mode State ---
-  const [isTyping, setIsTyping] = useState(false);
-
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
-  // Global Listeners
+  // --- Global Listeners ---
   useEffect(() => {
-    // 1. Mouse Move -> Stop Typing Mode (Show handles again)
-    function onMouseMove() {
-      if (isTyping) setIsTyping(false);
-    }
-
     function onWindowClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (slashMenu.open && !target.closest(".slash-menu")) {
@@ -79,22 +80,16 @@ export default function Editor() {
       setDragId(null);
       setDropTarget(null);
     }
-
-    window.addEventListener("mousemove", onMouseMove); // Listen for mouse movement
     window.addEventListener("mousedown", onWindowClick);
     document.addEventListener("dragend", onDragEnd);
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mousedown", onWindowClick);
       document.removeEventListener("dragend", onDragEnd);
     };
-  }, [slashMenu.open, isTyping]);
+  }, [slashMenu.open]);
 
   useEffect(() => {
     function onWindowKeyDown(e: KeyboardEvent) {
-      // 2. Key Down -> Enter Typing Mode (Hide handles)
-      if (!isTyping) setIsTyping(true);
-
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -102,9 +97,10 @@ export default function Editor() {
     }
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [undo, redo, isTyping]);
+  }, [undo, redo]);
 
-  // ... (Keep update handlers) ...
+  // --- Content Handlers ---
+
   const handleUpdateContent = (id: string, content: InlineNode[]) => {
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, content }));
     setBlocks(newBlocks, false);
@@ -136,11 +132,56 @@ export default function Editor() {
 
   const handleSelectionChange = (id: string, offset: number) => {
     setFocusedId(id);
-    setSelection({
-      start: { blockId: id, offset },
-      end: { blockId: id, offset },
-      isCollapsed: true,
-    });
+    const sel = window.getSelection();
+
+    // We update selection state. Note: For range selections, we ideally capture
+    // real start/end from the DOM. This simple implementation assumes localized updates.
+    // A robust implementation would calculate full range across blocks here.
+    if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      // Simple check: is this selection inside one block?
+      // For this demo, we assume single-block selection for formatting.
+      // Multi-block requires finding the start/end blocks in `flatBlocks`.
+      setSelection({
+        start: { blockId: id, offset: range.startOffset },
+        end: { blockId: id, offset: range.endOffset },
+        isCollapsed: false,
+      });
+    } else {
+      setSelection({
+        start: { blockId: id, offset },
+        end: { blockId: id, offset },
+        isCollapsed: true,
+      });
+    }
+  };
+
+  // --- Formatting (No execCommand) ---
+  const handleToggleMark = (mark: MarkType) => {
+    if (!selection || selection.isCollapsed) return;
+    saveSnapshot();
+
+    const { start, end } = selection;
+
+    // Only handling single-block formatting for this prototype
+    if (start.blockId === end.blockId) {
+      const blockId = start.blockId;
+      const block = flatBlocks.find((b) => b.id === blockId);
+      if (block) {
+        // Pure Model Manipulation
+        const newContent = toggleMarkInRange(
+          block.content,
+          start.offset,
+          end.offset,
+          mark
+        );
+        const newBlocks = updateBlockInTree(blocks, blockId, (b) => ({
+          ...b,
+          content: newContent,
+        }));
+        setBlocks(newBlocks, false);
+      }
+    }
   };
 
   const handleDeleteBlock = (id: string) => {
@@ -188,6 +229,32 @@ export default function Editor() {
     const currentIndex = flatBlocks.findIndex((b) => b.id === id);
     const block = flatBlocks[currentIndex];
 
+    // Shortcuts for Formatting
+    if (e.metaKey || e.ctrlKey) {
+      const key = e.key.toLowerCase();
+      if (key === "b") {
+        e.preventDefault();
+        handleToggleMark("bold");
+        return;
+      }
+      if (key === "i") {
+        e.preventDefault();
+        handleToggleMark("italic");
+        return;
+      }
+      if (key === "u") {
+        e.preventDefault();
+        handleToggleMark("underline");
+        return;
+      }
+      if (key === "e") {
+        e.preventDefault();
+        handleToggleMark("code");
+        return;
+      } // Inline code
+    }
+
+    // Slash Menu KeyNav
     if (slashMenu.open && slashMenu.blockId === id) {
       const filtered = COMMANDS.filter((c) =>
         c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
@@ -338,6 +405,7 @@ export default function Editor() {
     }, 0);
   };
 
+  // --- Drag & Drop ---
   const handleDragStart = (id: string) => setDragId(id);
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
@@ -358,7 +426,14 @@ export default function Editor() {
     if (!result) return;
     const sourceBlock = result.node;
     let newTree = deleteBlockFromTree(blocks, dragId);
-    newTree = insertAfterInTree(newTree, targetId, sourceBlock);
+
+    // Choose insertion point
+    if (dropTarget.pos === "top") {
+      newTree = insertBeforeInTree(newTree, targetId, sourceBlock);
+    } else {
+      newTree = insertAfterInTree(newTree, targetId, sourceBlock);
+    }
+
     setBlocks(newTree, false);
     setDragId(null);
     setDropTarget(null);
@@ -370,9 +445,16 @@ export default function Editor() {
 
   let listCounter = 0;
 
-  // --- Add "typing-mode" class based on state ---
+  // Current block for Toolbar context
+  const currentBlock = flatBlocks.find((b) => b.id === focusedId);
+  const currentType = currentBlock?.type || "paragraph";
+
   return (
-    <div className={`editor-container ${isTyping ? "typing-mode" : ""}`}>
+    <div
+      className={`editor-container ${
+        selection && !selection.isCollapsed ? "" : ""
+      }`}
+    >
       {blocks.map((block, index) => {
         if (block.type === "numbered-list") {
           listCounter++;
@@ -397,6 +479,7 @@ export default function Editor() {
                 : null
             }
             isSlashMenuOpen={isMenuOpenForBlock}
+            dropTarget={dropTarget}
             onUpdateContent={handleUpdateContent}
             onUpdateMetadata={handleUpdateMetadata}
             onSelectionChange={handleSelectionChange}
@@ -409,6 +492,7 @@ export default function Editor() {
         );
       })}
 
+      {/* Slash Menu */}
       {slashMenu.open && (
         <SlashMenu
           position={{ x: slashMenu.x, y: slashMenu.y }}
@@ -417,6 +501,16 @@ export default function Editor() {
           selectedIndex={slashMenu.selectedIndex}
           onSelect={(cmd) => applySlashCommand(cmd.type)}
           onClose={() => setSlashMenu((s) => ({ ...s, open: false }))}
+        />
+      )}
+
+      {/* Inline Formatting Toolbar */}
+      {selection && !selection.isCollapsed && (
+        <InlineToolbar
+          onConvertBlock={(type) => applySlashCommand(type)}
+          onToggleMark={handleToggleMark}
+          currentType={currentType}
+          onPreview={() => {}}
         />
       )}
     </div>

@@ -18,21 +18,19 @@ const BLOCK_SCHEMA: Record<BlockType, BlockRule> = {
   "bullet-list": { allowMarks: true },
   "numbered-list": { allowMarks: true },
   quote: { allowMarks: true },
-  code: { allowMarks: false }, // Critical: Code cannot have marks
+  code: { allowMarks: false }, // Code = No Marks
   divider: { isVoid: true },
 };
 
-// --- 2. SANITIZATION (The Police) ---
+// --- 2. SANITIZATION ---
 export function sanitizeBlock(block: Block): Block {
   const rule = BLOCK_SCHEMA[block.type];
   if (!rule) return { ...block, type: "paragraph" };
 
-  // Rule: Void blocks must be empty
   if (rule.isVoid && block.content.length > 0) {
     return { ...block, content: [] };
   }
 
-  // Rule: Code blocks must not have bold/italic marks
   if (rule.allowMarks === false) {
     const hasMarks = block.content.some((n) => n.marks.length > 0);
     if (hasMarks) {
@@ -134,13 +132,124 @@ export function insertAfterInTree(
   return newBlocks;
 }
 
-// --- 5. DOM PARSING (The "Right-to-Left" Fix) ---
+export function insertBeforeInTree(
+  blocks: Block[],
+  anchorId: string,
+  newBlock: Block
+): Block[] {
+  const newBlocks: Block[] = [];
+  for (const block of blocks) {
+    if (block.id === anchorId) {
+      newBlocks.push(newBlock);
+      newBlocks.push(block);
+    } else {
+      newBlocks.push(block);
+      if (block.children.length > 0) {
+        newBlocks[newBlocks.length - 1] = {
+          ...block,
+          children: insertBeforeInTree(block.children, anchorId, newBlock),
+        };
+      }
+    }
+  }
+  return newBlocks;
+}
+
+// --- 5. FORMATTING LOGIC ---
+
 function areMarksEqual(a: Mark[], b: Mark[]) {
   if (a.length !== b.length) return false;
   const sortedA = [...a].sort((x, y) => x.type.localeCompare(y.type));
   const sortedB = [...b].sort((x, y) => x.type.localeCompare(y.type));
   return JSON.stringify(sortedA) === JSON.stringify(sortedB);
 }
+
+export function toggleMarkInRange(
+  content: InlineNode[],
+  start: number,
+  end: number,
+  markType: MarkType
+): InlineNode[] {
+  if (start >= end) return content;
+
+  let allHaveMark = true;
+  let currentPos = 0;
+
+  // Check if we should ADD or REMOVE
+  for (const node of content) {
+    const nodeEnd = currentPos + node.text.length;
+    if (Math.max(currentPos, start) < Math.min(nodeEnd, end)) {
+      if (!node.marks.some((m) => m.type === markType)) {
+        allHaveMark = false;
+        break;
+      }
+    }
+    currentPos = nodeEnd;
+  }
+
+  const shouldAdd = !allHaveMark;
+  currentPos = 0;
+  const newContent: InlineNode[] = [];
+
+  for (const node of content) {
+    const nodeStart = currentPos;
+    const nodeEnd = currentPos + node.text.length;
+
+    if (nodeEnd <= start || nodeStart >= end) {
+      newContent.push(node);
+    } else {
+      const relativeStart = Math.max(0, start - nodeStart);
+      const relativeEnd = Math.min(node.text.length, end - nodeStart);
+
+      if (relativeStart > 0) {
+        newContent.push({
+          id: uid(),
+          text: node.text.slice(0, relativeStart),
+          marks: node.marks,
+        });
+      }
+
+      const middleText = node.text.slice(relativeStart, relativeEnd);
+      let newMarks = [...node.marks];
+      if (shouldAdd) {
+        if (!newMarks.some((m) => m.type === markType))
+          newMarks.push({ type: markType });
+      } else {
+        newMarks = newMarks.filter((m) => m.type !== markType);
+      }
+
+      newContent.push({ id: uid(), text: middleText, marks: newMarks });
+
+      if (relativeEnd < node.text.length) {
+        newContent.push({
+          id: uid(),
+          text: node.text.slice(relativeEnd),
+          marks: node.marks,
+        });
+      }
+    }
+    currentPos = nodeEnd;
+  }
+
+  return mergeSimilarNodes(newContent);
+}
+
+function mergeSimilarNodes(content: InlineNode[]): InlineNode[] {
+  const merged: InlineNode[] = [];
+  for (const node of content) {
+    if (merged.length > 0) {
+      const last = merged[merged.length - 1];
+      if (areMarksEqual(last.marks, node.marks)) {
+        last.text += node.text;
+        continue;
+      }
+    }
+    merged.push({ ...node });
+  }
+  return merged;
+}
+
+// --- 6. DOM PARSING ---
 
 export function parseDOMToContent(
   el: HTMLElement,
@@ -172,9 +281,8 @@ export function parseDOMToContent(
         element.tagName === "STRONG" ||
         element.tagName === "B" ||
         parseInt(element.style.fontWeight) >= 600
-      ) {
+      )
         newMarks.push({ type: "bold" });
-      }
       if (element.tagName === "EM" || element.tagName === "I")
         newMarks.push({ type: "italic" });
       if (element.tagName === "U") newMarks.push({ type: "underline" });
@@ -185,7 +293,7 @@ export function parseDOMToContent(
   }
   walk(el, []);
 
-  // Optimization: Reuse ID if structure matches (Fixes typing direction)
+  // Optimization
   if (
     previousContent.length === 1 &&
     draftNodes.length === 1 &&
@@ -209,11 +317,12 @@ export function parseDOMToContent(
   });
 }
 
+// --- 7. HELPERS ---
+
 export function getTextLength(content: InlineNode[]) {
   return content.reduce((acc, node) => acc + node.text.length, 0);
 }
 
-// --- 6. CURSOR MANAGEMENT ---
 export function getCaretOffset(root: HTMLElement): number {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return 0;
@@ -262,7 +371,6 @@ export function setCaretOffset(root: HTMLElement, offset: number) {
     selection.removeAllRanges();
     selection.addRange(range);
   } else {
-    // Fallback
     const r = document.createRange();
     r.selectNodeContents(root);
     r.collapse(false);

@@ -25,7 +25,6 @@ body {
   max-width: 800px;
   margin: 60px auto;
   padding: 0 40px;
-  position: relative;
 }
 
 /* --- Block Wrappers & Handle Alignment --- */
@@ -36,6 +35,7 @@ body {
   margin: 1px 0;
   padding: 2px 8px;
   border-radius: 4px;
+  position: relative;
 }
 
 .block-wrapper.selected {
