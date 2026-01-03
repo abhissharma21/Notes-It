@@ -18,7 +18,7 @@ import {
 import type { BlockType, MarkType } from "../types";
 
 interface Props {
-  onConvertBlock: (type: BlockType) => void;
+  onConvertBlock: (type: string) => void;
   onToggleMark: (mark: MarkType) => void;
   onUpdateBlockAlign: (align: "left" | "center" | "right") => void;
   currentType: BlockType;
@@ -53,19 +53,40 @@ export default function InlineToolbar({
         return;
       }
 
-      // Calculate position above text
-      const top = rect.top + window.scrollY - 50;
-      const left = rect.left + window.scrollX + rect.width / 2;
+      // --- POSITIONING LOGIC ---
+      const TOOLBAR_WIDTH = 380;
+      const GAP = 12;
+      const VIEWPORT_WIDTH = window.innerWidth;
+
+      let top = rect.top + window.scrollY - 40; // Default vertical align (above)
+      let left = 0;
+
+      // Vertical Center Alignment (Side positioning)
+      const verticalCenter = rect.top + window.scrollY + rect.height / 2 - 20;
+
+      // 1. Try RIGHT side
+      if (rect.right + TOOLBAR_WIDTH + GAP < VIEWPORT_WIDTH) {
+        left = rect.right + window.scrollX + GAP;
+        top = verticalCenter; // Center vertically next to selection
+      }
+      // 2. Try LEFT side
+      else if (rect.left - TOOLBAR_WIDTH - GAP > 0) {
+        left = rect.left + window.scrollX - TOOLBAR_WIDTH - GAP;
+        top = verticalCenter;
+      }
+      // 3. Fallback: Top Centered (Standard)
+      else {
+        left = rect.left + window.scrollX + rect.width / 2 - TOOLBAR_WIDTH / 2;
+        top = rect.top + window.scrollY - 50;
+      }
 
       setPosition({ top, left });
     }
 
     document.addEventListener("selectionchange", handleSelectionChange);
-    // Also listen to scroll to update position
     document.addEventListener("scroll", handleSelectionChange);
 
-    // Initial check
-    handleSelectionChange();
+    handleSelectionChange(); // Initial check
 
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
@@ -79,7 +100,7 @@ export default function InlineToolbar({
     <button
       className={`toolbar-btn ${active ? "active" : ""}`}
       onMouseDown={(e) => {
-        e.preventDefault(); // Prevent focus loss
+        e.preventDefault();
         e.stopPropagation();
         onClick();
       }}
@@ -96,12 +117,10 @@ export default function InlineToolbar({
       style={{
         top: position.top,
         left: position.left,
-        transform: "translateX(-50%)",
+        // Remove translate since we calculate exact pixels now
       }}
-      // Prevent focus loss when clicking toolbar background
       onMouseDown={(e) => e.preventDefault()}
     >
-      {/* 1. Type Selector */}
       <div className="toolbar-section relative">
         <button
           className="toolbar-btn text-dropdown-btn"
@@ -149,7 +168,6 @@ export default function InlineToolbar({
 
       <Divider />
 
-      {/* 2. Formatting */}
       <div className="toolbar-section">
         <Button icon={Bold} onClick={() => onToggleMark("bold")} />
         <Button icon={Italic} onClick={() => onToggleMark("italic")} />
@@ -159,7 +177,6 @@ export default function InlineToolbar({
 
       <Divider />
 
-      {/* 3. Alignment */}
       <div className="toolbar-section">
         <Button icon={AlignLeft} onClick={() => onUpdateBlockAlign("left")} />
         <Button
@@ -169,8 +186,8 @@ export default function InlineToolbar({
         <Button icon={AlignRight} onClick={() => onUpdateBlockAlign("right")} />
       </div>
 
-      {/* 4. Color / Link (Placeholders for now) */}
       <Divider />
+
       <div className="toolbar-section">
         <Button icon={LinkIcon} onClick={() => alert("Link coming soon")} />
       </div>
