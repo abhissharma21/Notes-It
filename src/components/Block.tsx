@@ -1,13 +1,9 @@
 import React, { useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
-import type { Block, InlineNode } from "../types";
-import BlockContent from "./BlockContent";
+import type { Block, InlineNode, BlockType } from "../types";
 import CodeBlock from "./CodeBlock";
-import ParagraphBlock from "./ParagraphBlock";
-import HeadingBlock from "./HeadingBlock";
-import ListBlock from "./ListBlock";
 import DividerBlock from "./DividerBlock";
-import QuoteBlock from "./QuoteBlock";
+import StandardBlock from "./StandardBlock"; // <--- UNIFIED
 import { useBlockLogic } from "../hooks/useBlockLogic";
 
 export interface BlockProps {
@@ -18,7 +14,10 @@ export interface BlockProps {
   isFocused: boolean;
   caretOffset: number | null;
   isSlashMenuOpen: boolean;
-  isRangeSelection: boolean; // <--- NEW
+  isRangeSelection: boolean;
+
+  // New Preview Prop
+  previewType?: BlockType | null;
 
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   onUpdateMetadata: (id: string, meta: Partial<Block>) => void;
@@ -33,198 +32,152 @@ export interface BlockProps {
   dropTarget: { id: string; pos: "top" | "bottom" } | null;
 }
 
-const GenericBlock = (props: BlockProps) => {
-  const {
-    block,
-    isFocused,
-    caretOffset,
-    onUpdateContent,
-    onSelectionChange,
-    onKeyDown,
-    isSlashMenuOpen,
-    isRangeSelection,
-  } = props;
-  const { contentRef, handleInput } = useBlockLogic({
-    block,
-    isFocused,
-    caretOffset,
-    onUpdateContent,
-    isSlashMenuOpen,
-    isRangeSelection, // <--- Pass
-  });
-  const isEmpty = block.content.length === 0;
-  const renderKey = isEmpty ? "empty" : "content";
+const BlockComponent = React.memo(
+  (props: BlockProps) => {
+    const {
+      block,
+      index,
+      listNumber,
+      isSelected,
+      isFocused,
+      caretOffset,
+      isSlashMenuOpen,
+      isRangeSelection,
+      dropTarget,
+      previewType, // Destructure
+      ...handlers
+    } = props;
 
-  let placeholder = "Type '/' for commands";
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const [showHandle, setShowHandle] = useState(false);
 
-  return (
-    <div
-      key={renderKey}
-      ref={contentRef}
-      className={`block block-${block.type}`}
-      contentEditable
-      suppressContentEditableWarning
-      onInput={handleInput}
-      onKeyDown={(e) => onKeyDown(e, block.id)}
-      onMouseUp={() => {
-        const sel = window.getSelection();
-        if (sel?.anchorNode) onSelectionChange(block.id, sel.anchorOffset);
-      }}
-      onFocus={() => {
-        if (!isFocused) onSelectionChange(block.id, 0);
-      }}
-      spellCheck={false}
-      data-placeholder={isEmpty && isFocused ? placeholder : ""}
-    >
-      <BlockContent content={block.content} />
-    </div>
-  );
-};
+    const isDropTarget = dropTarget?.id === block.id;
+    const dropPos = isDropTarget ? dropTarget.pos : null;
 
-const BlockComponentRaw: React.FC<BlockProps> = (props) => {
-  const {
-    block,
-    index,
-    listNumber,
-    isSelected,
-    isFocused,
-    caretOffset,
-    isSlashMenuOpen,
-    isRangeSelection, // Destructure
-    dropTarget,
-    ...handlers
-  } = props;
+    // --- ROUTER ---
+    let Component;
 
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [showHandle, setShowHandle] = useState(false);
+    if (block.type === "code") {
+      Component = <CodeBlock {...props} />;
+    } else if (block.type === "divider") {
+      Component = <DividerBlock {...props} />;
+    } else {
+      // Merge Paragraph, Heading, List, Quote into StandardBlock for animation support
+      Component = <StandardBlock {...props} previewType={previewType} />;
+    }
 
-  const isDropTarget = dropTarget?.id === block.id;
-  const dropPos = isDropTarget ? dropTarget.pos : null;
+    // Wrapper class for drag handle alignment
+    let wrapperClass = `wrapper-${block.type}`;
+    if (block.type === "heading") {
+      const level = block.props?.level || 1;
+      wrapperClass = `wrapper-h${level}`;
+    }
+    // Preview overrides wrapper class for handle alignment too
+    if (isFocused && previewType) {
+      if (previewType === ("h1" as any)) wrapperClass = `wrapper-h1`;
+      else if (previewType === ("h2" as any)) wrapperClass = `wrapper-h2`;
+      else wrapperClass = `wrapper-${previewType}`;
+    }
 
-  let Component;
-  if (block.type === "code") {
-    Component = <CodeBlock {...props} />;
-  } else if (block.type === "paragraph") {
-    Component = <ParagraphBlock {...props} />;
-  } else if (block.type === "heading") {
-    Component = <HeadingBlock {...props} />;
-  } else if (["bullet-list", "numbered-list"].includes(block.type)) {
-    Component = <ListBlock {...props} />;
-  } else if (block.type === "quote") {
-    Component = <QuoteBlock {...props} />;
-  } else if (block.type === "divider") {
-    Component = <DividerBlock {...props} />;
-  } else {
-    Component = <GenericBlock {...props} />;
-  }
-
-  let wrapperClass = `wrapper-${block.type}`;
-  if (block.type === "heading") {
-    const level = block.props?.level || 1;
-    wrapperClass = `wrapper-h${level}`;
-  }
-
-  return (
-    <div
-      className={`block-wrapper ${wrapperClass} ${
-        isSelected ? "selected" : ""
-      }`}
-      ref={wrapperRef}
-      id={block.id}
-      onMouseEnter={() => setShowHandle(true)}
-      onMouseLeave={() => setShowHandle(false)}
-      onDragOver={(e) => handlers.onDragOver(e, block.id)}
-      onDrop={(e) => {
-        e.stopPropagation();
-        handlers.onDrop(block.id);
-      }}
-      style={{ position: "relative" }}
-    >
-      {isDropTarget && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            height: "3px",
-            backgroundColor: "#2eaadc",
-            borderRadius: "2px",
-            zIndex: 100,
-            pointerEvents: "none",
-            top: dropPos === "top" ? "-2px" : "auto",
-            bottom: dropPos === "bottom" ? "-2px" : "auto",
-            boxShadow: "0 0 4px rgba(46, 170, 220, 0.5)",
-          }}
-        />
-      )}
-
+    return (
       <div
-        className="drag-handle"
-        contentEditable={false}
-        draggable
-        style={{ opacity: showHandle ? 1 : 0 }}
-        onDragStart={(e) => {
+        className={`block-wrapper ${wrapperClass} ${
+          isSelected ? "selected" : ""
+        }`}
+        ref={wrapperRef}
+        id={block.id}
+        onMouseEnter={() => setShowHandle(true)}
+        onMouseLeave={() => setShowHandle(false)}
+        onDragOver={(e) => handlers.onDragOver(e, block.id)}
+        onDrop={(e) => {
           e.stopPropagation();
-          handlers.onDragStart(block.id);
-          if (wrapperRef.current) {
-            e.dataTransfer.setDragImage(wrapperRef.current, 0, 0);
-          }
+          handlers.onDrop(block.id);
         }}
+        style={{ position: "relative" }}
       >
-        <GripVertical size={18} />
-      </div>
-
-      <div className="block-content-container">
-        {Component}
-
-        {block.children.length > 0 && block.isOpen && (
-          <div className="block-children">
-            {block.children.map((child, i) => (
-              <BlockComponent
-                key={child.id}
-                block={child}
-                index={i}
-                listNumber={0}
-                isSelected={false}
-                isFocused={false}
-                caretOffset={null}
-                isSlashMenuOpen={false}
-                isRangeSelection={false} // Children not involved in parent selection context
-                dropTarget={dropTarget}
-                {...handlers}
-              />
-            ))}
-          </div>
+        {isDropTarget && (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              height: "3px",
+              backgroundColor: "#2eaadc",
+              borderRadius: "2px",
+              zIndex: 100,
+              pointerEvents: "none",
+              top: dropPos === "top" ? "-2px" : "auto",
+              bottom: dropPos === "bottom" ? "-2px" : "auto",
+            }}
+          />
         )}
+
+        <div
+          className="drag-handle"
+          contentEditable={false}
+          draggable
+          style={{ opacity: showHandle ? 1 : 0 }}
+          onDragStart={(e) => {
+            e.stopPropagation();
+            handlers.onDragStart(block.id);
+            if (wrapperRef.current)
+              e.dataTransfer.setDragImage(wrapperRef.current, 0, 0);
+          }}
+        >
+          <GripVertical size={18} />
+        </div>
+
+        <div className="block-content-container">
+          {Component}
+
+          {block.children.length > 0 && block.isOpen && (
+            <div className="block-children">
+              {block.children.map((child, i) => (
+                <BlockComponent
+                  key={child.id}
+                  block={child}
+                  index={i}
+                  listNumber={0}
+                  isSelected={false}
+                  isFocused={false}
+                  caretOffset={null}
+                  isSlashMenuOpen={false}
+                  isRangeSelection={false}
+                  dropTarget={dropTarget}
+                  previewType={null} // Don't pass preview to children
+                  {...handlers}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  },
+  (prev, next) => {
+    if (next.isSlashMenuOpen) return false;
+    if (prev.isSlashMenuOpen !== next.isSlashMenuOpen) return false;
+    if (prev.isRangeSelection !== next.isRangeSelection) return false;
+    if (prev.previewType !== next.previewType) return false; // Re-render on preview change
 
-const BlockComponent = React.memo(BlockComponentRaw, (prev, next) => {
-  if (next.isSlashMenuOpen) return false;
-  if (prev.isSlashMenuOpen !== next.isSlashMenuOpen) return false;
+    const prevIsTarget = prev.dropTarget?.id === prev.block.id;
+    const nextIsTarget = next.dropTarget?.id === next.block.id;
+    if (prevIsTarget !== nextIsTarget) return false;
+    if (
+      prevIsTarget &&
+      nextIsTarget &&
+      prev.dropTarget?.pos !== next.dropTarget?.pos
+    )
+      return false;
 
-  // Re-render if selection type changes (collapsed <-> range)
-  if (prev.isRangeSelection !== next.isRangeSelection) return false;
-
-  const prevIsTarget = prev.dropTarget?.id === prev.block.id;
-  const nextIsTarget = next.dropTarget?.id === next.block.id;
-  if (prevIsTarget !== nextIsTarget) return false;
-  if (
-    prevIsTarget &&
-    nextIsTarget &&
-    prev.dropTarget?.pos !== next.dropTarget?.pos
-  )
-    return false;
-
-  return (
-    prev.block === next.block &&
-    prev.isSelected === next.isSelected &&
-    prev.isFocused === next.isFocused &&
-    prev.caretOffset === next.caretOffset &&
-    prev.listNumber === next.listNumber
-  );
-});
+    return (
+      prev.block === next.block &&
+      prev.isSelected === next.isSelected &&
+      prev.isFocused === next.isFocused &&
+      prev.caretOffset === next.caretOffset &&
+      prev.listNumber === next.listNumber
+    );
+  }
+);
 
 export default BlockComponent;

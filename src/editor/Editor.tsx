@@ -80,6 +80,8 @@ export default function Editor() {
 
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
+  const [previewType, setPreviewType] = useState<BlockType | null>(null);
+
   // --- Global Listeners ---
   useEffect(() => {
     function onMouseMove() {
@@ -215,6 +217,7 @@ export default function Editor() {
   };
 
   const handleInlineBlockConversion = (cmdType: string) => {
+    setPreviewType(null);
     if (!focusedId) return;
     saveSnapshot();
 
@@ -549,6 +552,8 @@ export default function Editor() {
                 ? selection.start.offset
                 : null
             }
+            // Pass Preview Type
+            previewType={focusedId === block.id ? previewType : null}
             isSlashMenuOpen={isMenuOpenForBlock}
             isRangeSelection={isRangeSelection}
             dropTarget={dropTarget}
@@ -581,6 +586,7 @@ export default function Editor() {
           onToggleMark={handleToggleMark}
           onUpdateBlockAlign={handleUpdateBlockAlign}
           currentType={currentType}
+          onPreview={(type) => setPreviewType(type)}
         />
       )}
     </div>
