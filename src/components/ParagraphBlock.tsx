@@ -26,6 +26,8 @@ export default function ParagraphBlock(props: Props) {
     isRangeSelection,
   } = props;
 
+  const textAlign = props.block.props?.align || "left";
+
   const { contentRef, handleInput } = useBlockLogic({
     block,
     isFocused,
@@ -45,6 +47,7 @@ export default function ParagraphBlock(props: Props) {
       key={renderKey}
       ref={contentRef}
       className="block block-paragraph"
+      style={{ textAlign: textAlign }}
       contentEditable
       suppressContentEditableWarning
       onInput={handleInput}

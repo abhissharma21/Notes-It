@@ -259,6 +259,7 @@ export function parseDOMToContent(
 
   function walk(node: Node, currentMarks: Mark[]) {
     if (node.nodeType === Node.TEXT_NODE) {
+      // ... existing text logic
       const text = node.textContent || "";
       if (text.length > 0) {
         const prev = draftNodes[draftNodes.length - 1];
@@ -277,22 +278,35 @@ export function parseDOMToContent(
         return;
 
       const newMarks = [...currentMarks];
+
+      // --- EXISTING MARKS ---
       if (
         element.tagName === "STRONG" ||
         element.tagName === "B" ||
         parseInt(element.style.fontWeight) >= 600
-      )
+      ) {
         newMarks.push({ type: "bold" });
+      }
       if (element.tagName === "EM" || element.tagName === "I")
         newMarks.push({ type: "italic" });
       if (element.tagName === "U") newMarks.push({ type: "underline" });
       if (element.tagName === "CODE") newMarks.push({ type: "code" });
+
+      // --- NEW: STRIKETHROUGH ---
+      if (
+        element.tagName === "S" ||
+        element.tagName === "DEL" ||
+        element.style.textDecoration.includes("line-through")
+      ) {
+        newMarks.push({ type: "strike" });
+      }
 
       element.childNodes.forEach((child) => walk(child, newMarks));
     }
   }
   walk(el, []);
 
+  // ... (Rest of function remains identical) ...
   // Optimization
   if (
     previousContent.length === 1 &&

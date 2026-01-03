@@ -1,4 +1,10 @@
-export type MarkType = "bold" | "italic" | "underline" | "code" | "highlight";
+export type MarkType =
+  | "bold"
+  | "italic"
+  | "underline"
+  | "strike"
+  | "code"
+  | "highlight";
 
 export interface Mark {
   type: MarkType;
@@ -29,6 +35,7 @@ export interface Block {
   props: {
     level?: 1 | 2 | 3;
     language?: string;
+    align?: "left" | "center" | "right";
     [key: string]: any;
   };
 }

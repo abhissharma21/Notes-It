@@ -13,9 +13,9 @@ const Leaf = ({ node }: { node: InlineNode }) => {
   if (node.marks.some((m) => m.type === "underline")) {
     children = <span className="underline">{children}</span>;
   }
-
-  // Note: Code styling is handled by the block wrapper in CodeBlock.tsx,
-  // but inline code (backticks) in paragraphs can still use this.
+  if (node.marks.some((m) => m.type === "strike")) {
+    children = <s>{children}</s>;
+  }
   if (node.marks.some((m) => m.type === "code")) {
     children = (
       <code className="bg-gray-800 text-red-400 rounded px-1 text-sm font-mono">

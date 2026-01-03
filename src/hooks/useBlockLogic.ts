@@ -8,7 +8,7 @@ interface UseBlockLogicProps {
   caretOffset: number | null;
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   isSlashMenuOpen?: boolean;
-  isRangeSelection?: boolean; // <--- NEW PROP
+  isRangeSelection?: boolean;
 }
 
 export function useBlockLogic({
@@ -17,7 +17,7 @@ export function useBlockLogic({
   caretOffset,
   onUpdateContent,
   isSlashMenuOpen,
-  isRangeSelection, // <--- Destructure
+  isRangeSelection,
 }: UseBlockLogicProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const cursorOffsetRef = useRef<number | null>(null);
@@ -39,7 +39,7 @@ export function useBlockLogic({
     onUpdateContent(block.id, newContent);
   };
 
-  // 1. Restore Cursor after Typing (Always runs)
+  // 1. Restore Cursor after Typing
   useLayoutEffect(() => {
     if (cursorOffsetRef.current !== null && contentRef.current && isFocused) {
       setCaretOffset(contentRef.current, cursorOffsetRef.current);
@@ -47,19 +47,25 @@ export function useBlockLogic({
     }
   }, [block.content, isFocused]);
 
-  // 2. Restore Cursor after Navigation (SKIP IF RANGE SELECTION)
+  // 2. Restore Cursor after Navigation
   useLayoutEffect(() => {
-    if (isRangeSelection) return; // Don't collapse the selection!
+    // CRITICAL: If there is a native Range selection, DO NOT touch the cursor.
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
 
     if (isFocused && contentRef.current && caretOffset !== null) {
       setCaretOffset(contentRef.current, caretOffset);
     }
   }, [isFocused, caretOffset, isRangeSelection]);
 
-  // 3. Force Focus (SKIP IF RANGE SELECTION)
+  // 3. Force Focus
   useEffect(() => {
     if (isSlashMenuOpen) return;
-    if (isRangeSelection) return; // Browser handles range focus; don't interfere.
+
+    // CRITICAL: Check native selection directly.
+    // If user has highlighted text, do NOT force focus/collapse.
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
 
     if (isFocused && contentRef.current) {
       if (document.activeElement !== contentRef.current) {
@@ -73,11 +79,11 @@ export function useBlockLogic({
           contentRef.current.focus();
           if (caretOffset === null) {
             const range = document.createRange();
-            const sel = window.getSelection();
+            const selection = window.getSelection();
             range.setStart(contentRef.current, 0);
             range.collapse(true);
-            sel?.removeAllRanges();
-            sel?.addRange(range);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
           } else {
             setCaretOffset(contentRef.current, caretOffset);
           }
@@ -85,7 +91,7 @@ export function useBlockLogic({
       });
       return () => cancelAnimationFrame(rafId);
     }
-  }, [isFocused, caretOffset, block.type, isSlashMenuOpen, isRangeSelection]);
+  }, [isFocused, caretOffset, block.type, isSlashMenuOpen]); // Removed isRangeSelection dep to rely on native check
 
   return {
     contentRef,
