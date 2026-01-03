@@ -11,6 +11,7 @@ interface Props {
   onSelectionChange: (id: string, offset: number) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
   isSlashMenuOpen: boolean;
+  isRangeSelection?: boolean;
 }
 
 export default function QuoteBlock(props: Props) {
@@ -22,6 +23,7 @@ export default function QuoteBlock(props: Props) {
     onSelectionChange,
     onKeyDown,
     isSlashMenuOpen,
+    isRangeSelection,
   } = props;
 
   const { contentRef, handleInput } = useBlockLogic({
@@ -30,6 +32,7 @@ export default function QuoteBlock(props: Props) {
     caretOffset,
     onUpdateContent,
     isSlashMenuOpen,
+    isRangeSelection,
   });
 
   const isEmpty = block.content.length === 0;

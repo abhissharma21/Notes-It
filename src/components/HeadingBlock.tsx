@@ -11,6 +11,7 @@ interface Props {
   onSelectionChange: (id: string, offset: number) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
   isSlashMenuOpen?: boolean;
+  isRangeSelection?: boolean;
 }
 
 export default function HeadingBlock(props: Props) {
@@ -22,6 +23,7 @@ export default function HeadingBlock(props: Props) {
     onSelectionChange,
     onKeyDown,
     isSlashMenuOpen,
+    isRangeSelection,
   } = props;
 
   const { contentRef, handleInput } = useBlockLogic({
@@ -30,6 +32,7 @@ export default function HeadingBlock(props: Props) {
     caretOffset,
     onUpdateContent,
     isSlashMenuOpen,
+    isRangeSelection,
   });
 
   // Safe access to level, default to 1

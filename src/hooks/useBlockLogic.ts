@@ -7,7 +7,8 @@ interface UseBlockLogicProps {
   isFocused: boolean;
   caretOffset: number | null;
   onUpdateContent: (id: string, content: InlineNode[]) => void;
-  isSlashMenuOpen?: boolean; // <--- NEW PROP
+  isSlashMenuOpen?: boolean;
+  isRangeSelection?: boolean; // <--- NEW PROP
 }
 
 export function useBlockLogic({
@@ -16,11 +17,11 @@ export function useBlockLogic({
   caretOffset,
   onUpdateContent,
   isSlashMenuOpen,
+  isRangeSelection, // <--- Destructure
 }: UseBlockLogicProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const cursorOffsetRef = useRef<number | null>(null);
 
-  // Stale State Protection
   const latestContentRef = useRef<InlineNode[]>(block.content);
   if (block.content !== latestContentRef.current) {
     latestContentRef.current = block.content;
@@ -38,7 +39,7 @@ export function useBlockLogic({
     onUpdateContent(block.id, newContent);
   };
 
-  // Restore Cursor (Typing)
+  // 1. Restore Cursor after Typing (Always runs)
   useLayoutEffect(() => {
     if (cursorOffsetRef.current !== null && contentRef.current && isFocused) {
       setCaretOffset(contentRef.current, cursorOffsetRef.current);
@@ -46,18 +47,19 @@ export function useBlockLogic({
     }
   }, [block.content, isFocused]);
 
-  // Restore Cursor (Navigation)
+  // 2. Restore Cursor after Navigation (SKIP IF RANGE SELECTION)
   useLayoutEffect(() => {
+    if (isRangeSelection) return; // Don't collapse the selection!
+
     if (isFocused && contentRef.current && caretOffset !== null) {
       setCaretOffset(contentRef.current, caretOffset);
     }
-  }, [isFocused, caretOffset]);
+  }, [isFocused, caretOffset, isRangeSelection]);
 
-  // Force Focus
+  // 3. Force Focus (SKIP IF RANGE SELECTION)
   useEffect(() => {
-    // If slash menu is open, DO NOT force focus.
-    // This allows the user to click the menu items without the input stealing focus back immediately.
     if (isSlashMenuOpen) return;
+    if (isRangeSelection) return; // Browser handles range focus; don't interfere.
 
     if (isFocused && contentRef.current) {
       if (document.activeElement !== contentRef.current) {
@@ -83,7 +85,7 @@ export function useBlockLogic({
       });
       return () => cancelAnimationFrame(rafId);
     }
-  }, [isFocused, caretOffset, block.type, isSlashMenuOpen]); // Added dependency
+  }, [isFocused, caretOffset, block.type, isSlashMenuOpen, isRangeSelection]);
 
   return {
     contentRef,

@@ -18,9 +18,7 @@ export interface BlockProps {
   isFocused: boolean;
   caretOffset: number | null;
   isSlashMenuOpen: boolean;
-
-  // New Prop
-  dropTarget: { id: string; pos: "top" | "bottom" } | null;
+  isRangeSelection: boolean; // <--- NEW
 
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   onUpdateMetadata: (id: string, meta: Partial<Block>) => void;
@@ -31,6 +29,8 @@ export interface BlockProps {
   onDragStart: (id: string) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
   onDrop: (targetId: string) => void;
+
+  dropTarget: { id: string; pos: "top" | "bottom" } | null;
 }
 
 const GenericBlock = (props: BlockProps) => {
@@ -42,6 +42,7 @@ const GenericBlock = (props: BlockProps) => {
     onSelectionChange,
     onKeyDown,
     isSlashMenuOpen,
+    isRangeSelection,
   } = props;
   const { contentRef, handleInput } = useBlockLogic({
     block,
@@ -49,6 +50,7 @@ const GenericBlock = (props: BlockProps) => {
     caretOffset,
     onUpdateContent,
     isSlashMenuOpen,
+    isRangeSelection, // <--- Pass
   });
   const isEmpty = block.content.length === 0;
   const renderKey = isEmpty ? "empty" : "content";
@@ -88,14 +90,14 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
     isFocused,
     caretOffset,
     isSlashMenuOpen,
-    dropTarget, // Destructure
+    isRangeSelection, // Destructure
+    dropTarget,
     ...handlers
   } = props;
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [showHandle, setShowHandle] = useState(false);
 
-  // Check if this block is the current drop target
   const isDropTarget = dropTarget?.id === block.id;
   const dropPos = isDropTarget ? dropTarget.pos : null;
 
@@ -131,7 +133,6 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
       id={block.id}
       onMouseEnter={() => setShowHandle(true)}
       onMouseLeave={() => setShowHandle(false)}
-      // Pass Drag events here
       onDragOver={(e) => handlers.onDragOver(e, block.id)}
       onDrop={(e) => {
         e.stopPropagation();
@@ -139,7 +140,6 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
       }}
       style={{ position: "relative" }}
     >
-      {/* --- VISUAL DROP INDICATOR --- */}
       {isDropTarget && (
         <div
           style={{
@@ -151,7 +151,6 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
             borderRadius: "2px",
             zIndex: 100,
             pointerEvents: "none",
-            // Position based on calculation
             top: dropPos === "top" ? "-2px" : "auto",
             bottom: dropPos === "bottom" ? "-2px" : "auto",
             boxShadow: "0 0 4px rgba(46, 170, 220, 0.5)",
@@ -190,7 +189,8 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
                 isFocused={false}
                 caretOffset={null}
                 isSlashMenuOpen={false}
-                dropTarget={dropTarget} // Pass down to children so they can be targets too
+                isRangeSelection={false} // Children not involved in parent selection context
+                dropTarget={dropTarget}
                 {...handlers}
               />
             ))}
@@ -205,7 +205,9 @@ const BlockComponent = React.memo(BlockComponentRaw, (prev, next) => {
   if (next.isSlashMenuOpen) return false;
   if (prev.isSlashMenuOpen !== next.isSlashMenuOpen) return false;
 
-  // Re-render if drop target changes relevant to this block
+  // Re-render if selection type changes (collapsed <-> range)
+  if (prev.isRangeSelection !== next.isRangeSelection) return false;
+
   const prevIsTarget = prev.dropTarget?.id === prev.block.id;
   const nextIsTarget = next.dropTarget?.id === next.block.id;
   if (prevIsTarget !== nextIsTarget) return false;

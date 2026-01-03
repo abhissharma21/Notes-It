@@ -29,21 +29,33 @@ const getPlainText = (content: InlineNode[]) =>
   content.map((n) => n.text).join("");
 
 export default function Editor() {
+  // 1. Initialize blocks once to get a stable reference to the first ID
+  const [initialBlocks] = useState(() => [createBlock("paragraph", "")]);
+
   const {
     state: blocks,
     set: setBlocksRaw,
     undo,
     redo,
     saveSnapshot,
-  } = useHistory<Block[]>([createBlock("paragraph", "")]);
+  } = useHistory<Block[]>(initialBlocks);
 
   const setBlocks = (newBlocks: Block[], save: boolean) => {
     const normalized = normalizeEditorState(newBlocks);
     setBlocksRaw(normalized, save);
   };
 
-  const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [selection, setSelection] = useState<EditorSelection | null>(null);
+  // 2. Set initial Focus and Selection to the first block
+  const [focusedId, setFocusedId] = useState<string | null>(
+    initialBlocks[0].id
+  );
+
+  const [selection, setSelection] = useState<EditorSelection | null>({
+    start: { blockId: initialBlocks[0].id, offset: 0 },
+    end: { blockId: initialBlocks[0].id, offset: 0 },
+    isCollapsed: true,
+  });
+
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     id: string;
@@ -66,30 +78,43 @@ export default function Editor() {
     y: 0,
   });
 
+  const [isTyping, setIsTyping] = useState(false);
+
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
   // --- Global Listeners ---
   useEffect(() => {
+    function onMouseMove() {
+      if (isTyping) setIsTyping(false);
+    }
+
     function onWindowClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (slashMenu.open && !target.closest(".slash-menu")) {
         setSlashMenu((prev) => ({ ...prev, open: false }));
       }
     }
+
     function onDragEnd() {
       setDragId(null);
       setDropTarget(null);
     }
+
+    window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mousedown", onWindowClick);
     document.addEventListener("dragend", onDragEnd);
+
     return () => {
+      window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mousedown", onWindowClick);
       document.removeEventListener("dragend", onDragEnd);
     };
-  }, [slashMenu.open]);
+  }, [slashMenu.open, isTyping]);
 
   useEffect(() => {
     function onWindowKeyDown(e: KeyboardEvent) {
+      if (!isTyping) setIsTyping(true);
+
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -97,9 +122,9 @@ export default function Editor() {
     }
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, isTyping]);
 
-  // --- Content Handlers ---
+  // --- Handlers ---
 
   const handleUpdateContent = (id: string, content: InlineNode[]) => {
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, content }));
@@ -134,14 +159,8 @@ export default function Editor() {
     setFocusedId(id);
     const sel = window.getSelection();
 
-    // We update selection state. Note: For range selections, we ideally capture
-    // real start/end from the DOM. This simple implementation assumes localized updates.
-    // A robust implementation would calculate full range across blocks here.
     if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
-      // Simple check: is this selection inside one block?
-      // For this demo, we assume single-block selection for formatting.
-      // Multi-block requires finding the start/end blocks in `flatBlocks`.
       setSelection({
         start: { blockId: id, offset: range.startOffset },
         end: { blockId: id, offset: range.endOffset },
@@ -156,19 +175,15 @@ export default function Editor() {
     }
   };
 
-  // --- Formatting (No execCommand) ---
   const handleToggleMark = (mark: MarkType) => {
     if (!selection || selection.isCollapsed) return;
     saveSnapshot();
 
     const { start, end } = selection;
-
-    // Only handling single-block formatting for this prototype
     if (start.blockId === end.blockId) {
       const blockId = start.blockId;
       const block = flatBlocks.find((b) => b.id === blockId);
       if (block) {
-        // Pure Model Manipulation
         const newContent = toggleMarkInRange(
           block.content,
           start.offset,
@@ -229,7 +244,7 @@ export default function Editor() {
     const currentIndex = flatBlocks.findIndex((b) => b.id === id);
     const block = flatBlocks[currentIndex];
 
-    // Shortcuts for Formatting
+    // Shortcuts
     if (e.metaKey || e.ctrlKey) {
       const key = e.key.toLowerCase();
       if (key === "b") {
@@ -251,10 +266,10 @@ export default function Editor() {
         e.preventDefault();
         handleToggleMark("code");
         return;
-      } // Inline code
+      }
     }
 
-    // Slash Menu KeyNav
+    // Slash Menu
     if (slashMenu.open && slashMenu.blockId === id) {
       const filtered = COMMANDS.filter((c) =>
         c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
@@ -405,7 +420,6 @@ export default function Editor() {
     }, 0);
   };
 
-  // --- Drag & Drop ---
   const handleDragStart = (id: string) => setDragId(id);
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
@@ -427,7 +441,6 @@ export default function Editor() {
     const sourceBlock = result.node;
     let newTree = deleteBlockFromTree(blocks, dragId);
 
-    // Choose insertion point
     if (dropTarget.pos === "top") {
       newTree = insertBeforeInTree(newTree, targetId, sourceBlock);
     } else {
@@ -444,17 +457,11 @@ export default function Editor() {
   );
 
   let listCounter = 0;
-
-  // Current block for Toolbar context
   const currentBlock = flatBlocks.find((b) => b.id === focusedId);
   const currentType = currentBlock?.type || "paragraph";
 
   return (
-    <div
-      className={`editor-container ${
-        selection && !selection.isCollapsed ? "" : ""
-      }`}
-    >
+    <div className={`editor-container ${isTyping ? "typing-mode" : ""}`}>
       {blocks.map((block, index) => {
         if (block.type === "numbered-list") {
           listCounter++;
@@ -464,6 +471,12 @@ export default function Editor() {
 
         const isMenuOpenForBlock =
           slashMenu.open && slashMenu.blockId === block.id;
+
+        const isRangeSelection =
+          focusedId === block.id &&
+          selection !== null &&
+          !selection.isCollapsed &&
+          selection.start.blockId === block.id;
 
         return (
           <BlockComponent
@@ -479,6 +492,7 @@ export default function Editor() {
                 : null
             }
             isSlashMenuOpen={isMenuOpenForBlock}
+            isRangeSelection={isRangeSelection}
             dropTarget={dropTarget}
             onUpdateContent={handleUpdateContent}
             onUpdateMetadata={handleUpdateMetadata}
@@ -492,7 +506,6 @@ export default function Editor() {
         );
       })}
 
-      {/* Slash Menu */}
       {slashMenu.open && (
         <SlashMenu
           position={{ x: slashMenu.x, y: slashMenu.y }}
@@ -504,7 +517,6 @@ export default function Editor() {
         />
       )}
 
-      {/* Inline Formatting Toolbar */}
       {selection && !selection.isCollapsed && (
         <InlineToolbar
           onConvertBlock={(type) => applySlashCommand(type)}

@@ -11,6 +11,7 @@ interface Props {
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   onSelectionChange: (id: string, offset: number) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
+  isRangeSelection?: boolean;
 }
 
 export default function ListBlock(props: Props) {
@@ -22,6 +23,7 @@ export default function ListBlock(props: Props) {
     onUpdateContent,
     onSelectionChange,
     onKeyDown,
+    isRangeSelection,
   } = props;
 
   const { contentRef, handleInput } = useBlockLogic({
@@ -29,6 +31,7 @@ export default function ListBlock(props: Props) {
     isFocused,
     caretOffset,
     onUpdateContent,
+    isRangeSelection,
   });
 
   const isEmpty = block.content.length === 0;
