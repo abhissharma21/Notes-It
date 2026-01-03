@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import BlockComponent from "../components/Block";
 import SlashMenu from "../components/SlashMenu";
-import InlineToolbar from "./InlineToolbar";
+import InlineToolbar from "../components/InlineToolbar";
 import {
   createBlock,
   flattenBlocks,
