@@ -49,8 +49,6 @@ export default function StandardBlock(props: Props) {
 
   const isEmpty = block.content.length === 0;
 
-  // FIX: Force remount if content structure changes (length) to prevent removeChild error.
-  // The useBlockLogic hook handles cursor restoration, so this remount is seamless.
   const renderKey = `${isEmpty ? "empty" : "content"}-${block.content.length}`;
 
   const displayType = isFocused && previewType ? previewType : block.type;
