@@ -8,6 +8,7 @@ import {
   Quote,
   Code,
   Minus,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { Command } from "./types";
 
@@ -73,6 +74,12 @@ export const COMMANDS: Command[] = [
     description: "Visually divide blocks.",
     icon: Minus,
     shortcut: "---",
+  },
+  {
+    type: "drawio",
+    label: "Draw.io Diagram",
+    description: "Embed and edit a diagram.",
+    icon: ImageIcon,
   },
 ];
 

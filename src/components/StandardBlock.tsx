@@ -11,8 +11,6 @@ interface Props {
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   onSelectionChange: (id: string, offset: number) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
-
-  // New props for Preview
   previewType?: BlockType | null;
 }
 

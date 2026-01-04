@@ -11,7 +11,7 @@ const Leaf = ({ node }: { node: InlineNode }) => {
     children = <em className="italic">{children}</em>;
   }
   if (node.marks.some((m) => m.type === "underline")) {
-    children = <u>{children}</u>; // <--- FIX: Native tag
+    children = <u>{children}</u>;
   }
   if (node.marks.some((m) => m.type === "strike")) {
     children = <s>{children}</s>;

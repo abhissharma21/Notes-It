@@ -24,7 +24,8 @@ export type BlockType =
   | "numbered-list"
   | "quote"
   | "code"
-  | "divider";
+  | "divider"
+  | "drawio";
 
 export interface Block {
   id: string;
@@ -36,6 +37,8 @@ export interface Block {
     level?: 1 | 2 | 3;
     language?: string;
     align?: "left" | "center" | "right";
+    xml?: string;
+    previewUrl?: string;
     [key: string]: any;
   };
 }

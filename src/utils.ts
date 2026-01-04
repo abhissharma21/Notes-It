@@ -6,7 +6,6 @@ import {
   type BlockType,
 } from "./types";
 
-// --- 1. SCHEMA DEFINITION ---
 interface BlockRule {
   isVoid?: boolean;
   allowMarks?: boolean;
@@ -18,19 +17,24 @@ const BLOCK_SCHEMA: Record<BlockType, BlockRule> = {
   "bullet-list": { allowMarks: true },
   "numbered-list": { allowMarks: true },
   quote: { allowMarks: true },
-  code: { allowMarks: false }, // Code = No Marks
+  code: { allowMarks: false },
   divider: { isVoid: true },
+  drawio: { isVoid: true },
 };
 
 // --- 2. SANITIZATION ---
 export function sanitizeBlock(block: Block): Block {
   const rule = BLOCK_SCHEMA[block.type];
+
+  // 1. Unknown Type -> Paragraph
   if (!rule) return { ...block, type: "paragraph" };
 
+  // 2. Void Content check
   if (rule.isVoid && block.content.length > 0) {
     return { ...block, content: [] };
   }
 
+  // 3. Mark stripping
   if (rule.allowMarks === false) {
     const hasMarks = block.content.some((n) => n.marks.length > 0);
     if (hasMarks) {
@@ -40,6 +44,15 @@ export function sanitizeBlock(block: Block): Block {
       };
     }
   }
+
+  // 4. Schema Initialization for Draw.io
+  if (block.type === "drawio") {
+    // Ensure props exist
+    if (!block.props.xml && block.props.xml !== "") {
+      return { ...block, props: { ...block.props, xml: "", previewUrl: "" } };
+    }
+  }
+
   return block;
 }
 

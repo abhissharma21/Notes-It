@@ -29,10 +29,8 @@ const getPlainText = (content: InlineNode[]) =>
   content.map((n) => n.text).join("");
 
 export default function Editor() {
-  // 1. Create the initial block once so we have a stable ID
   const [initialBlock] = useState(() => createBlock("paragraph", ""));
 
-  // 2. Initialize History with that block
   const {
     state: blocks,
     set: setBlocksRaw,
@@ -46,7 +44,6 @@ export default function Editor() {
     setBlocksRaw(normalized, save);
   };
 
-  // 3. Initialize Focus/Selection to that specific block ID
   const [focusedId, setFocusedId] = useState<string | null>(initialBlock.id);
   const [selection, setSelection] = useState<EditorSelection | null>({
     start: { blockId: initialBlock.id, offset: 0 },
@@ -77,44 +74,37 @@ export default function Editor() {
   });
 
   const [isTyping, setIsTyping] = useState(false);
+  const [previewType, setPreviewType] = useState<BlockType | null>(null);
 
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
-
-  const [previewType, setPreviewType] = useState<BlockType | null>(null);
 
   // --- Global Listeners ---
   useEffect(() => {
     function onMouseMove() {
       if (isTyping) setIsTyping(false);
     }
-
     function onWindowClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (slashMenu.open && !target.closest(".slash-menu")) {
         setSlashMenu((prev) => ({ ...prev, open: false }));
       }
     }
-
     function onDragEnd() {
       setDragId(null);
       setDropTarget(null);
     }
 
-    // Global Selection Listener
     const handleGlobalSelection = () => {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return;
-
       const range = sel.getRangeAt(0);
       let target = range.startContainer.parentElement;
-      while (target && !target.id) {
-        target = target.parentElement;
-      }
-
+      while (target && !target.id) target = target.parentElement;
       const blockId = target?.id;
 
       if (blockId) {
         if (!sel.isCollapsed) {
+          setFocusedId(blockId);
           setSelection({
             start: { blockId, offset: range.startOffset },
             end: { blockId, offset: range.endOffset },
@@ -134,7 +124,6 @@ export default function Editor() {
     window.addEventListener("mousedown", onWindowClick);
     document.addEventListener("dragend", onDragEnd);
     document.addEventListener("selectionchange", handleGlobalSelection);
-
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mousedown", onWindowClick);
@@ -146,7 +135,6 @@ export default function Editor() {
   useEffect(() => {
     function onWindowKeyDown(e: KeyboardEvent) {
       if (!isTyping) setIsTyping(true);
-
       if ((e.metaKey || e.ctrlKey) && e.key === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -161,7 +149,6 @@ export default function Editor() {
   const handleUpdateContent = (id: string, content: InlineNode[]) => {
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, content }));
     setBlocks(newBlocks, false);
-
     const plainText = getPlainText(content);
     if (plainText.startsWith("/")) {
       const el = document.getElementById(id);
@@ -189,13 +176,11 @@ export default function Editor() {
 
   const handleSelectionChange = (id: string, offset: number) => {
     setFocusedId(id);
-    // Selection state is largely handled by global listener
   };
 
   const handleToggleMark = (mark: MarkType) => {
     if (!selection || selection.isCollapsed) return;
     saveSnapshot();
-
     const { start, end } = selection;
     if (start.blockId === end.blockId) {
       const blockId = start.blockId;
@@ -217,13 +202,11 @@ export default function Editor() {
   };
 
   const handleInlineBlockConversion = (cmdType: string) => {
-    setPreviewType(null);
     if (!focusedId) return;
     saveSnapshot();
-
+    setPreviewType(null);
     let newType: BlockType = cmdType as BlockType;
     let newProps: any = {};
-
     if (cmdType === "h1") {
       newType = "heading";
       newProps = { level: 1 };
@@ -251,7 +234,6 @@ export default function Editor() {
       };
       return sanitizeBlock(updated);
     });
-
     setBlocks(newBlocks, false);
   };
 
@@ -265,6 +247,23 @@ export default function Editor() {
     setBlocks(newBlocks, false);
   };
 
+  // --- NEW: Add Block Below (for Upload completion) ---
+  const handleAddParagraphBelow = (blockId: string) => {
+    saveSnapshot();
+    const newBlock = createBlock("paragraph");
+    const newTree = insertAfterInTree(blocks, blockId, newBlock);
+    setBlocks(newTree, false);
+    // Force Focus Next
+    setTimeout(() => {
+      setFocusedId(newBlock.id);
+      setSelection({
+        start: { blockId: newBlock.id, offset: 0 },
+        end: { blockId: newBlock.id, offset: 0 },
+        isCollapsed: true,
+      });
+    }, 0);
+  };
+
   const handleDeleteBlock = (id: string) => {
     saveSnapshot();
     const index = flatBlocks.findIndex((b) => b.id === id);
@@ -272,7 +271,6 @@ export default function Editor() {
     const next = index < flatBlocks.length - 1 ? flatBlocks[index + 1] : null;
 
     let newBlocks = deleteBlockFromTree(blocks, id);
-
     if (newBlocks.length === 0) {
       const newBlock = createBlock("paragraph");
       newBlocks = [newBlock];
@@ -285,9 +283,7 @@ export default function Editor() {
       });
       return;
     }
-
     setBlocks(newBlocks, false);
-
     if (prev) {
       const len = getTextLength(prev.content);
       setFocusedId(prev.id);
@@ -310,7 +306,6 @@ export default function Editor() {
     const currentIndex = flatBlocks.findIndex((b) => b.id === id);
     const block = flatBlocks[currentIndex];
 
-    // Shortcuts
     if (e.metaKey || e.ctrlKey) {
       const key = e.key.toLowerCase();
       if (key === "b") {
@@ -335,7 +330,24 @@ export default function Editor() {
       }
     }
 
-    // Slash Menu
+    if (e.key === "Tab") {
+      e.preventDefault();
+      saveSnapshot();
+      if (e.shiftKey) return;
+      if (currentIndex > 0) {
+        const prevBlock = flatBlocks[currentIndex - 1];
+        let tempTree = deleteBlockFromTree(blocks, id);
+        tempTree = updateBlockInTree(tempTree, prevBlock.id, (parent) => ({
+          ...parent,
+          isOpen: true,
+          children: [...parent.children, block],
+        }));
+        setBlocks(tempTree, false);
+        setTimeout(() => setFocusedId(id), 0);
+      }
+      return;
+    }
+
     if (slashMenu.open && slashMenu.blockId === id) {
       const filtered = COMMANDS.filter((c) =>
         c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
@@ -384,16 +396,19 @@ export default function Editor() {
       e.preventDefault();
       saveSnapshot();
 
+      if (block.type === "drawio" || block.type === "divider") {
+        handleAddParagraphBelow(id); // Use new handler
+        return;
+      }
+
       const contentLen = getTextLength(block.content);
-      const isList =
-        block.type === "bullet-list" || block.type === "numbered-list";
+      const isList = ["bullet-list", "numbered-list"].includes(block.type);
 
       if (isList && contentLen === 0) {
-        const newBlocks = updateBlockInTree(blocks, id, (b) => ({
-          ...b,
-          type: "paragraph",
-        }));
-        setBlocks(newBlocks, false);
+        setBlocks(
+          updateBlockInTree(blocks, id, (b) => ({ ...b, type: "paragraph" })),
+          false
+        );
         return;
       }
 
@@ -415,14 +430,11 @@ export default function Editor() {
         e.preventDefault();
         saveSnapshot();
         const prevIndex = currentIndex - 1;
-
         if (prevIndex >= 0) {
           const prevBlock = flatBlocks[prevIndex];
           const prevLength = getTextLength(prevBlock.content);
-
           const newTree = deleteBlockFromTree(blocks, id);
           setBlocks(newTree, false);
-
           setFocusedId(prevBlock.id);
           setSelection({
             start: { blockId: prevBlock.id, offset: prevLength },
@@ -437,10 +449,8 @@ export default function Editor() {
   const applySlashCommand = (cmdType: string) => {
     if (!slashMenu.blockId) return;
     saveSnapshot();
-
     let newType: BlockType = cmdType as BlockType;
     let newProps: any = {};
-
     if (cmdType === "h1") {
       newType = "heading";
       newProps = { level: 1 };
@@ -458,24 +468,36 @@ export default function Editor() {
     else if (cmdType === "quote") newType = "quote";
     else if (cmdType === "divider") newType = "divider";
 
-    const newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
+    // 1. Convert current block
+    let newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
       const updated = {
         ...b,
         type: newType,
-        content: [], // Slash command CLEARS text
+        content: [],
         props: { ...b.props, ...newProps },
       };
       return sanitizeBlock(updated);
     });
 
+    // 2. Void block special handling (Insert below)
+    const isVoid = newType === "drawio" || newType === "divider";
+    let nextBlockId = slashMenu.blockId;
+
+    if (isVoid) {
+      const newBlock = createBlock("paragraph");
+      newBlocks = insertAfterInTree(newBlocks, slashMenu.blockId, newBlock);
+      nextBlockId = newBlock.id;
+    }
+
     setBlocks(newBlocks, false);
     setSlashMenu((s) => ({ ...s, open: false }));
 
+    // 3. Focus
     setTimeout(() => {
-      setFocusedId(slashMenu.blockId);
+      setFocusedId(nextBlockId);
       setSelection({
-        start: { blockId: slashMenu.blockId!, offset: 0 },
-        end: { blockId: slashMenu.blockId!, offset: 0 },
+        start: { blockId: nextBlockId!, offset: 0 },
+        end: { blockId: nextBlockId!, offset: 0 },
         isCollapsed: true,
       });
     }, 0);
@@ -485,30 +507,24 @@ export default function Editor() {
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - rect.top;
-    const pos = y < rect.height / 2 ? "top" : "bottom";
+    const pos = e.clientY - rect.top < rect.height / 2 ? "top" : "bottom";
     setDropTarget({ id, pos });
   };
   const handleDrop = (targetId: string) => {
-    if (!dragId || !dropTarget) return;
-    if (dragId === targetId) {
+    if (!dragId || !dropTarget || dragId === targetId) {
       setDragId(null);
       setDropTarget(null);
       return;
     }
     saveSnapshot();
     const result = findNodePath(blocks, dragId);
-    if (!result) return;
-    const sourceBlock = result.node;
-    let newTree = deleteBlockFromTree(blocks, dragId);
-
-    if (dropTarget.pos === "top") {
-      newTree = insertBeforeInTree(newTree, targetId, sourceBlock);
-    } else {
-      newTree = insertAfterInTree(newTree, targetId, sourceBlock);
+    if (result) {
+      let tree = deleteBlockFromTree(blocks, dragId);
+      if (dropTarget.pos === "top")
+        tree = insertBeforeInTree(tree, targetId, result.node);
+      else tree = insertAfterInTree(tree, targetId, result.node);
+      setBlocks(tree, false);
     }
-
-    setBlocks(newTree, false);
     setDragId(null);
     setDropTarget(null);
   };
@@ -516,7 +532,6 @@ export default function Editor() {
   const filteredCommands = COMMANDS.filter((c) =>
     c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
   );
-
   let listCounter = 0;
   const currentBlock = flatBlocks.find((b) => b.id === focusedId);
   const currentType = currentBlock?.type || "paragraph";
@@ -524,15 +539,10 @@ export default function Editor() {
   return (
     <div className={`editor-container ${isTyping ? "typing-mode" : ""}`}>
       {blocks.map((block, index) => {
-        if (block.type === "numbered-list") {
-          listCounter++;
-        } else {
-          listCounter = 0;
-        }
-
+        if (block.type === "numbered-list") listCounter++;
+        else listCounter = 0;
         const isMenuOpenForBlock =
           slashMenu.open && slashMenu.blockId === block.id;
-
         const isRangeSelection =
           focusedId === block.id &&
           selection !== null &&
@@ -552,7 +562,6 @@ export default function Editor() {
                 ? selection.start.offset
                 : null
             }
-            // Pass Preview Type
             previewType={focusedId === block.id ? previewType : null}
             isSlashMenuOpen={isMenuOpenForBlock}
             isRangeSelection={isRangeSelection}
@@ -561,6 +570,7 @@ export default function Editor() {
             onUpdateMetadata={handleUpdateMetadata}
             onSelectionChange={handleSelectionChange}
             onDeleteBlock={handleDeleteBlock}
+            onAddParagraphBelow={handleAddParagraphBelow}
             onKeyDown={handleKeyDown}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
