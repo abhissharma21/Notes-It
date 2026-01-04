@@ -37,29 +37,25 @@ export default function ImageBlock({
   const [error, setError] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
 
-  // Refs for logic
   const captionRef = useRef<HTMLDivElement>(null);
   const captionCursorRef = useRef<number | null>(null);
-  const widthRef = useRef<number>(width); // Track width for resize logic
+  const widthRef = useRef<number>(width);
 
-  // Sync props
   useEffect(() => {
     if (block.props.src && block.props.src !== src) setSrc(block.props.src);
     if (block.props.width && block.props.width !== width) {
       setWidth(block.props.width);
       widthRef.current = block.props.width;
     }
-    // Note: We use block.props.align directly in render to avoid stale state issues
     if (block.props.caption !== caption) setCaption(block.props.caption || []);
   }, [block.props]);
 
-  // --- CAPTION CURSOR RESTORATION (The "Right-to-Left" Fix) ---
   useLayoutEffect(() => {
     if (captionCursorRef.current !== null && captionRef.current) {
       setCaretOffset(captionRef.current, captionCursorRef.current);
       captionCursorRef.current = null;
     }
-  }, [caption]); // Run whenever caption updates
+  }, [caption]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,7 +68,6 @@ export default function ImageBlock({
     }
   };
 
-  // --- RESIZE LOGIC (The "Snap Back" Fix) ---
   const handleMouseDownResize = (
     e: React.MouseEvent,
     direction: "left" | "right"
@@ -82,14 +77,12 @@ export default function ImageBlock({
     setIsResizing(true);
 
     const startX = e.clientX;
-    const startWidth = widthRef.current; // Use ref for current truth
+    const startWidth = widthRef.current;
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientX - startX;
       const change = direction === "right" ? delta : -delta;
       const newWidth = Math.max(100, Math.min(1200, startWidth + change * 2));
-
-      // Update State (Visual) AND Ref (Logic)
       setWidth(newWidth);
       widthRef.current = newWidth;
     };
@@ -98,7 +91,6 @@ export default function ImageBlock({
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
       setIsResizing(false);
-      // Save the FINAL width from the Ref
       onUpdateMetadata(block.id, {
         props: { ...block.props, width: widthRef.current },
       });
@@ -109,14 +101,10 @@ export default function ImageBlock({
   };
 
   const handleCaptionInput = (e: React.FormEvent<HTMLDivElement>) => {
-    // 1. Save Cursor
     if (captionRef.current) {
       captionCursorRef.current = getCaretOffset(captionRef.current);
     }
-    // 2. Parse Content
     const newContent = parseDOMToContent(e.currentTarget, caption);
-
-    // 3. Update State (Triggers LayoutEffect)
     setCaption(newContent);
     onUpdateMetadata(block.id, {
       props: { ...block.props, caption: newContent },
@@ -127,7 +115,6 @@ export default function ImageBlock({
     if (captionRef.current) captionRef.current.focus();
   };
 
-  // --- RENDER ---
   if (!src) {
     return (
       <div
@@ -167,10 +154,7 @@ export default function ImageBlock({
     );
   }
 
-  // Determine Alignment (Default to center for rendering, but check props for button active state)
   const currentAlign = block.props.align || "center";
-
-  // Prevent crash by ensuring a key exists for the caption
   const captionKey = `caption-${caption.length}`;
 
   return (
@@ -183,7 +167,6 @@ export default function ImageBlock({
       style={{
         display: "flex",
         flexDirection: "column",
-        // Align the image wrapper itself
         alignItems:
           currentAlign === "left"
             ? "flex-start"
@@ -206,7 +189,6 @@ export default function ImageBlock({
           >
             <AlignLeft size={16} />
           </button>
-
           <button
             className={block.props.align === "center" ? "active" : ""}
             onClick={() =>
@@ -217,7 +199,6 @@ export default function ImageBlock({
           >
             <AlignCenter size={16} />
           </button>
-
           <button
             className={block.props.align === "right" ? "active" : ""}
             onClick={() =>
@@ -228,15 +209,11 @@ export default function ImageBlock({
           >
             <AlignRight size={16} />
           </button>
-
           <div className="toolbar-divider" />
-
           <button onClick={handleCaptionClick} title="Add Caption">
             <Type size={16} />
           </button>
-
           <div className="toolbar-divider" />
-
           <div className="relative-wrapper" style={{ position: "relative" }}>
             <input
               type="file"
@@ -255,7 +232,6 @@ export default function ImageBlock({
               <ImageIcon size={16} />
             </button>
           </div>
-
           <button onClick={() => onDeleteBlock(block.id)} className="delete">
             <Trash size={16} />
           </button>
@@ -282,7 +258,6 @@ export default function ImageBlock({
           />
         )}
 
-        {/* RESIZE HANDLES */}
         {isFocused && (
           <>
             <div
@@ -303,14 +278,31 @@ export default function ImageBlock({
         style={{ width: width, maxWidth: "100%" }}
       >
         <div
-          key={captionKey} // Force remount if length changes to prevent DOM mismatch
+          key={captionKey}
           ref={captionRef}
           className="image-caption"
           contentEditable
           suppressContentEditableWarning
           data-placeholder="Write a caption..."
           onInput={handleCaptionInput}
-          onKeyDown={(e) => e.stopPropagation()}
+          // --- FIX FOR ENTER & LEFT ALIGNMENT ---
+          style={{
+            textAlign: "left", // Force Left Align
+            color: "#888",
+            fontSize: "13px",
+            outline: "none",
+            minHeight: "1.5em",
+          }}
+          onKeyDown={(e) => {
+            e.stopPropagation(); // Don't bubble to block navigation yet
+
+            // If Enter, stop editing caption and focus the block wrapper
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (captionRef.current) captionRef.current.blur();
+              onSelectionChange(block.id, 0); // Focus the image block
+            }
+          }}
         >
           <BlockContent content={caption} />
         </div>

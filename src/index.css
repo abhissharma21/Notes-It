@@ -898,10 +898,9 @@ body {
   border-color: #fff;
 }
 
-/* Caption */
 .image-caption {
   margin-top: 8px;
-  text-align: center;
+  text-align: left; /* FIX: Align Left */
   color: #888;
   font-size: 13px;
   outline: none;
@@ -909,6 +908,7 @@ body {
   padding: 2px 4px;
   border-radius: 4px;
   transition: background 0.2s;
+  width: 100%; /* Ensure it fills the wrapper to align properly */
 }
 .image-caption:focus {
   color: #ccc;
