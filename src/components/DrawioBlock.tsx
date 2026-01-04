@@ -28,18 +28,13 @@ export default function DrawioBlock({
   const [isLoading, setIsLoading] = useState(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Sync props
   useEffect(() => {
     if (block.props.xml && block.props.xml !== xml) setXml(block.props.xml);
     if (block.props.previewUrl && block.props.previewUrl !== previewUrl)
       setPreviewUrl(block.props.previewUrl);
   }, [block.props.xml, block.props.previewUrl]);
-
-  // Determine if we need to run the hidden generator
-  // We need the iframe if: 1. User is editing OR 2. We have XML but no preview image yet
-  const needsPreviewGeneration = xml && !previewUrl;
-  const shouldRenderIframe = isEditing || needsPreviewGeneration;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,17 +44,13 @@ export default function DrawioBlock({
     reader.onload = (event) => {
       const content = event.target?.result as string;
       if (content && content.length > 0) {
-        // Update Local
         setXml(content);
-        // Reset preview to force generation
         setPreviewUrl("");
-
-        // Update Global
+        setIsEditing(false);
+        setIsLoading(false);
         onUpdateMetadata(block.id, {
           props: { ...block.props, xml: content, previewUrl: "" },
         });
-
-        // Move Cursor
         onAddParagraphBelow(block.id);
       } else {
         alert("File appears empty.");
@@ -72,7 +63,6 @@ export default function DrawioBlock({
     (e: MessageEvent) => {
       if (!iframeRef.current || e.source !== iframeRef.current.contentWindow)
         return;
-
       let msg;
       try {
         msg = JSON.parse(e.data);
@@ -90,17 +80,13 @@ export default function DrawioBlock({
             "*"
           );
           break;
-
         case "init":
           setIsLoading(false);
-          // Load XML
           iframeRef.current.contentWindow?.postMessage(
             JSON.stringify({ action: "load", autosave: 1, xml: xml }),
             "*"
           );
-
-          // If we are just generating a preview, request it immediately
-          if (needsPreviewGeneration) {
+          if (!previewUrl) {
             iframeRef.current.contentWindow?.postMessage(
               JSON.stringify({
                 action: "export",
@@ -111,18 +97,15 @@ export default function DrawioBlock({
             );
           }
           break;
-
         case "autosave":
-          // Whenever user saves in edit mode, regenerate preview
           iframeRef.current.contentWindow?.postMessage(
             JSON.stringify({ action: "export", format: "xmlsvg" }),
             "*"
           );
           break;
-
         case "export":
           if (msg.data) {
-            setPreviewUrl(msg.data); // Update local to switch view immediately
+            setPreviewUrl(msg.data);
             onUpdateMetadata(block.id, {
               props: {
                 ...block.props,
@@ -132,13 +115,12 @@ export default function DrawioBlock({
             });
           }
           break;
-
         case "exit":
           setIsEditing(false);
           break;
       }
     },
-    [xml, needsPreviewGeneration, block.id, onUpdateMetadata]
+    [xml, previewUrl, block.id, onUpdateMetadata]
   );
 
   useEffect(() => {
@@ -203,11 +185,11 @@ export default function DrawioBlock({
     );
   }
 
-  // --- 2. PREVIEW STATE (Standard) ---
-  // Show this if we have a preview AND we are not editing
+  // --- 2. PREVIEW STATE ---
   if (!isEditing && previewUrl) {
     return (
       <div
+        ref={containerRef}
         className={`block-drawio-preview ${isFocused ? "focused" : ""}`}
         onMouseDown={() => onSelectionChange(block.id, 0)}
         onDoubleClick={() => {
@@ -240,12 +222,18 @@ export default function DrawioBlock({
                 setIsEditing(true);
               }}
               className="edit-btn"
+              title="Edit Diagram"
             >
               <Edit2 size={14} style={{ marginRight: 4 }} /> Edit
             </button>
+            {/* --- DELETE BUTTON IN PREVIEW --- */}
             <button
-              onClick={() => onDeleteBlock(block.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDeleteBlock(block.id);
+              }}
               className="delete-btn"
+              title="Delete Diagram"
             >
               <Trash size={14} />
             </button>
@@ -255,14 +243,17 @@ export default function DrawioBlock({
     );
   }
 
-  // --- 3. IFRAME STATE (Editing OR Generating) ---
+  // --- 3. EDITOR / GENERATING STATE ---
+  // If editing OR if we need to generate a preview (xml exists but previewUrl doesn't)
+  const needsPreviewGeneration = xml && !previewUrl;
+
   return (
     <div
       className={`block-drawio-container ${isFocused ? "focused" : ""}`}
       style={{
         position: "relative",
-        // If we are just generating a preview (not editing), hide the container physically but keep iframe alive
-        height: needsPreviewGeneration ? "0px" : "500px",
+        minHeight: "500px",
+        height: needsPreviewGeneration ? "0px" : "500px", // Hide if just generating
         visibility: needsPreviewGeneration ? "hidden" : "visible",
         backgroundColor: "#fff",
         userSelect: "none",
@@ -274,7 +265,6 @@ export default function DrawioBlock({
         </button>
       )}
 
-      {/* Show loader only if actually editing, or we can show a mini loader placeholder if generating */}
       {isLoading && !needsPreviewGeneration && (
         <div className="drawio-loader">
           <Loader className="spin" size={24} />
@@ -282,11 +272,10 @@ export default function DrawioBlock({
         </div>
       )}
 
-      {/* If generating preview, show a temporary placeholder in place of the block */}
       {needsPreviewGeneration && (
         <div
           className="preview-placeholder"
-          style={{ height: "150px", visibility: "visible" }}
+          style={{ height: "150px", visibility: "visible", display: "flex" }}
         >
           <Loader className="spin" size={24} color="#666" />
           <span style={{ marginTop: 12, color: "#888", fontSize: "13px" }}>
@@ -302,6 +291,7 @@ export default function DrawioBlock({
           width: "100%",
           height: "100%",
           border: "none",
+          borderRadius: "4px",
           display: "block",
           pointerEvents: "auto",
         }}

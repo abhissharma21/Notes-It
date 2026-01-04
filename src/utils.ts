@@ -20,6 +20,7 @@ const BLOCK_SCHEMA: Record<BlockType, BlockRule> = {
   code: { allowMarks: false },
   divider: { isVoid: true },
   drawio: { isVoid: true },
+  image: { isVoid: true },
 };
 
 // --- 2. SANITIZATION ---

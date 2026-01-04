@@ -8,10 +8,13 @@ interface Props {
   listNumber: number;
   isFocused: boolean;
   caretOffset: number | null;
+  selectionEnd: number | null;
   onUpdateContent: (id: string, content: InlineNode[]) => void;
   onSelectionChange: (id: string, offset: number) => void;
   onKeyDown: (e: React.KeyboardEvent, id: string) => void;
   previewType?: BlockType | null;
+  isSlashMenuOpen: boolean;
+  isRangeSelection: boolean;
 }
 
 export default function StandardBlock(props: Props) {
@@ -20,47 +23,51 @@ export default function StandardBlock(props: Props) {
     listNumber,
     isFocused,
     caretOffset,
+    selectionEnd,
     onUpdateContent,
     onSelectionChange,
     onKeyDown,
     previewType,
+    isSlashMenuOpen,
+    isRangeSelection,
   } = props;
 
-  const { contentRef, handleInput } = useBlockLogic({
+  const {
+    contentRef,
+    handleInput,
+    handleCompositionStart,
+    handleCompositionEnd,
+  } = useBlockLogic({
     block,
     isFocused,
     caretOffset,
+    selectionEnd,
     onUpdateContent,
+    isSlashMenuOpen,
+    isRangeSelection,
   });
 
   const isEmpty = block.content.length === 0;
 
-  // STABLE KEY: We use 'content' string to avoid remounting unless necessary.
-  // This allows CSS transitions (font-size) to animate on the existing node.
-  const renderKey = isEmpty ? "empty" : "content";
+  // FIX: Force remount if content structure changes (length) to prevent removeChild error.
+  // The useBlockLogic hook handles cursor restoration, so this remount is seamless.
+  const renderKey = `${isEmpty ? "empty" : "content"}-${block.content.length}`;
 
-  // --- PREVIEW LOGIC ---
-  // If focused and we have a preview type (hovering in toolbar), use that.
-  // Otherwise use the actual block type.
   const displayType = isFocused && previewType ? previewType : block.type;
 
-  // --- DYNAMIC STYLES ---
   let placeholder = "Type '/' for commands";
-  let wrapperClass = `block block-${displayType}`; // Base class
+  let wrapperClass = `block block-${displayType}`;
 
-  // Handle Heading Levels
   if (displayType === "heading") {
     const level = block.props?.level || 1;
     wrapperClass = `block block-h${level}`;
     placeholder = `Heading ${level}`;
-
-    // Preview logic for headings (if previewing 'h1', override level logic)
-    if (previewType === "heading") {
-      // We can't easily preview levels without passing previewLevel,
-      // assuming standard heading preview maps to block-h1 for now or handled by parent mapping
-    }
   }
-  // Map specific legacy preview types
+
+  if (displayType === "bullet-list" || displayType === "numbered-list")
+    placeholder = "List";
+  if (displayType === "quote") placeholder = "Quote";
+
   if (previewType === ("h1" as any)) {
     wrapperClass = "block block-h1";
     placeholder = "Heading 1";
@@ -74,11 +81,6 @@ export default function StandardBlock(props: Props) {
     placeholder = "Heading 3";
   }
 
-  if (displayType === "quote") placeholder = "Quote";
-  if (displayType === "bullet-list" || displayType === "numbered-list")
-    placeholder = "List";
-
-  // --- LIST MARKER LOGIC ---
   const isList =
     displayType === "bullet-list" || displayType === "numbered-list";
   const isOrdered = displayType === "numbered-list";
@@ -88,7 +90,6 @@ export default function StandardBlock(props: Props) {
       className={`standard-block-container ${displayType}`}
       style={{ display: "flex", width: "100%" }}
     >
-      {/* Render Marker for Lists */}
       {isList && (
         <div
           contentEditable={false}
@@ -108,14 +109,15 @@ export default function StandardBlock(props: Props) {
         </div>
       )}
 
-      {/* Editable Content with Transition Class */}
       <div
-        key={renderKey}
+        key={renderKey} // <--- Critical Fix
         ref={contentRef}
-        className={wrapperClass} // CSS Transition handles animation here
+        className={wrapperClass}
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
+        onCompositionStart={handleCompositionStart}
+        onCompositionEnd={handleCompositionEnd}
         onKeyDown={(e) => onKeyDown(e, block.id)}
         onMouseUp={() => {
           const sel = window.getSelection();
@@ -129,7 +131,6 @@ export default function StandardBlock(props: Props) {
         style={{
           flex: 1,
           minWidth: 0,
-          // Inline alignment style
           textAlign: block.props?.align || "left",
         }}
       >

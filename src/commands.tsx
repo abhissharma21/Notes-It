@@ -81,6 +81,12 @@ export const COMMANDS: Command[] = [
     description: "Embed and edit a diagram.",
     icon: ImageIcon,
   },
+  {
+    type: "image",
+    label: "Image",
+    description: "Upload or embed with a link.",
+    icon: ImageIcon,
+  },
 ];
 
 /**

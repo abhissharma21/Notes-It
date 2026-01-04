@@ -776,3 +776,146 @@ body {
   color: white;
   border-color: #ff5555;
 }
+
+.block-image-empty {
+  background-color: #f3f3f3;
+  border-radius: 4px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  cursor: pointer;
+  position: relative;
+  margin: 4px 0;
+  min-height: 44px;
+}
+.block-image-empty:hover {
+  background-color: #e5e5e5;
+}
+.block-image-empty.focused {
+  outline: 2px solid var(--accent);
+}
+
+.image-placeholder {
+  display: flex;
+  align-items: center;
+}
+
+/* Image Container */
+.block-image-container {
+  margin: 12px 0;
+  position: relative;
+}
+.block-image-container.focused .image-wrapper {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.image-error {
+  background: #2a1f1f;
+  color: #ff6b6b;
+  height: 150px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px dashed #ff6b6b;
+}
+
+.image-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 6px;
+  display: flex;
+  padding: 4px;
+  gap: 2px;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  height: 32px;
+  align-items: center;
+}
+
+.image-toolbar button {
+  background: transparent;
+  border: none;
+  color: #ccc;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+
+.image-toolbar button:hover,
+.image-toolbar button.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.image-toolbar button.delete:hover {
+  background: #ff5555;
+}
+
+/* --- PILL RESIZE HANDLES --- */
+.resize-handle-pill {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 48px; /* Height of the pill */
+  background-color: rgba(0, 0, 0, 0.5); /* Dark fill */
+  border: 1px solid rgba(255, 255, 255, 0.8); /* White outline */
+  border-radius: 12px;
+  cursor: col-resize;
+  z-index: 15;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s ease, background-color 0.2s;
+  pointer-events: auto;
+}
+
+.resize-handle-pill.left {
+  left: 12px;
+}
+.resize-handle-pill.right {
+  right: 12px;
+}
+
+/* Show on wrapper hover or focus */
+.block-image-container:hover .resize-handle-pill,
+.block-image-container.focused .resize-handle-pill {
+  opacity: 1;
+}
+
+.resize-handle-pill:hover {
+  background-color: rgba(0, 0, 0, 0.8);
+  border-color: #fff;
+}
+
+/* Caption */
+.image-caption {
+  margin-top: 8px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  outline: none;
+  min-height: 1.5em;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.image-caption:focus {
+  color: #ccc;
+  background: rgba(255, 255, 255, 0.05);
+}
+.image-caption:empty::before {
+  content: attr(data-placeholder);
+  color: #555;
+  pointer-events: none;
+}

@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
 import type { Block, InlineNode, BlockType } from "../types";
-import BlockContent from "./BlockContent";
 import CodeBlock from "./CodeBlock";
 import ParagraphBlock from "./ParagraphBlock";
 import HeadingBlock from "./HeadingBlock";
@@ -10,7 +9,7 @@ import DividerBlock from "./DividerBlock";
 import QuoteBlock from "./QuoteBlock";
 import DrawioBlock from "./DrawioBlock";
 import StandardBlock from "./StandardBlock";
-import { useBlockLogic } from "../hooks/useBlockLogic";
+import ImageBlock from "./ImageBlock";
 
 export interface BlockProps {
   block: Block;
@@ -79,8 +78,11 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
     Component = (
       <DrawioBlock {...props} onAddParagraphBelow={onAddParagraphBelow} />
     );
+  } else if (block.type === "image") {
+    Component = (
+      <ImageBlock {...props} onAddParagraphBelow={onAddParagraphBelow} />
+    );
   } else {
-    // Fallback / Standard Block Logic (Inlined here instead of GenericBlock)
     Component = <StandardBlock {...props} previewType={previewType} />;
   }
 

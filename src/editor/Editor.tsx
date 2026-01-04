@@ -467,6 +467,10 @@ export default function Editor() {
     else if (cmdType === "numbered-list") newType = "numbered-list";
     else if (cmdType === "quote") newType = "quote";
     else if (cmdType === "divider") newType = "divider";
+    else if (cmdType === "image") {
+      newType = "image";
+      newProps = { src: "", width: 600, align: "center" };
+    }
 
     // 1. Convert current block
     let newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
@@ -480,7 +484,8 @@ export default function Editor() {
     });
 
     // 2. Void block special handling (Insert below)
-    const isVoid = newType === "drawio" || newType === "divider";
+    const isVoid =
+      newType === "drawio" || newType === "divider" || newType === "image";
     let nextBlockId = slashMenu.blockId;
 
     if (isVoid) {

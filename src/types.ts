@@ -25,7 +25,8 @@ export type BlockType =
   | "quote"
   | "code"
   | "divider"
-  | "drawio";
+  | "drawio"
+  | "image";
 
 export interface Block {
   id: string;
@@ -39,6 +40,11 @@ export interface Block {
     align?: "left" | "center" | "right";
     xml?: string;
     previewUrl?: string;
+    // --- Image Props ---
+    src?: string;
+    alt?: string;
+    caption?: InlineNode[]; // Structured caption
+    width?: number; // Pixel width
     [key: string]: any;
   };
 }
