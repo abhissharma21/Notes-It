@@ -863,6 +863,39 @@ body {
   background: #ff5555;
 }
 
+.replace-image-wrapper {
+    position: relative;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer; /* Force pointer cursor */
+    color: #ccc;
+    overflow: hidden; /* Contain the input */
+    transition: background 0.1s;
+}
+
+/* Hover effect on wrapper (triggered when hovering input) */
+.replace-image-wrapper:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+}
+
+/* Invisible Input covering the wrapper */
+.replace-image-wrapper input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer; /* Ensure pointer cursor on input itself */
+    z-index: 10;
+    font-size: 0;
+}
+
 /* --- PILL RESIZE HANDLES --- */
 .resize-handle-pill {
   position: absolute;
