@@ -23,19 +23,14 @@ const BLOCK_SCHEMA: Record<BlockType, BlockRule> = {
   image: { isVoid: true },
 };
 
-// --- 2. SANITIZATION ---
 export function sanitizeBlock(block: Block): Block {
   const rule = BLOCK_SCHEMA[block.type];
-
-  // 1. Unknown Type -> Paragraph
   if (!rule) return { ...block, type: "paragraph" };
 
-  // 2. Void Content check
   if (rule.isVoid && block.content.length > 0) {
     return { ...block, content: [] };
   }
 
-  // 3. Mark stripping
   if (rule.allowMarks === false) {
     const hasMarks = block.content.some((n) => n.marks.length > 0);
     if (hasMarks) {
@@ -45,10 +40,8 @@ export function sanitizeBlock(block: Block): Block {
       };
     }
   }
-
-  // 4. Schema Initialization for Draw.io
+  
   if (block.type === "drawio") {
-    // Ensure props exist
     if (!block.props.xml && block.props.xml !== "") {
       return { ...block, props: { ...block.props, xml: "", previewUrl: "" } };
     }
@@ -57,7 +50,6 @@ export function sanitizeBlock(block: Block): Block {
   return block;
 }
 
-// --- 3. FACTORY & NORMALIZATION ---
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 export function createBlock(type: BlockType = "paragraph", text = ""): Block {
@@ -71,12 +63,21 @@ export function createBlock(type: BlockType = "paragraph", text = ""): Block {
   });
 }
 
+export function duplicateBlock(block: Block): Block {
+  return {
+    ...block,
+    id: crypto.randomUUID(),
+    content: block.content.map(n => ({ ...n, id: uid() })),
+    children: block.children.map(child => duplicateBlock(child)),
+    props: { ...block.props }
+  };
+}
+
 export function normalizeEditorState(blocks: Block[]): Block[] {
   if (blocks.length === 0) return [createBlock("paragraph")];
   return blocks.map(sanitizeBlock);
 }
 
-// --- 4. TREE UTILS ---
 export function flattenBlocks(blocks: Block[]): Block[] {
   return blocks.reduce((acc: Block[], block) => {
     acc.push(block);
@@ -169,8 +170,6 @@ export function insertBeforeInTree(
   return newBlocks;
 }
 
-// --- 5. FORMATTING LOGIC ---
-
 function areMarksEqual(a: Mark[], b: Mark[]) {
   if (a.length !== b.length) return false;
   const sortedA = [...a].sort((x, y) => x.type.localeCompare(y.type));
@@ -189,7 +188,6 @@ export function toggleMarkInRange(
   let allHaveMark = true;
   let currentPos = 0;
 
-  // Check if we should ADD or REMOVE
   for (const node of content) {
     const nodeEnd = currentPos + node.text.length;
     if (Math.max(currentPos, start) < Math.min(nodeEnd, end)) {
@@ -263,24 +261,26 @@ function mergeSimilarNodes(content: InlineNode[]): InlineNode[] {
   return merged;
 }
 
-// --- 6. DOM PARSING ---
-
 export function parseDOMToContent(
   el: HTMLElement,
   previousContent: InlineNode[]
 ): InlineNode[] {
-  const draftNodes: Omit<InlineNode, "id">[] = [];
+  const draftNodes: { id?: string; text: string; marks: Mark[] }[] = [];
 
   function walk(node: Node, currentMarks: Mark[]) {
     if (node.nodeType === Node.TEXT_NODE) {
-      // ... existing text logic
       const text = node.textContent || "";
       if (text.length > 0) {
+        let foundId: string | undefined = undefined;
+        if (node.parentNode && node.parentNode.nodeType === Node.ELEMENT_NODE) {
+            foundId = (node.parentNode as HTMLElement).dataset.nodeId;
+        }
+
         const prev = draftNodes[draftNodes.length - 1];
-        if (prev && areMarksEqual(prev.marks, currentMarks)) {
+        if (prev && areMarksEqual(prev.marks, currentMarks) && (!foundId || foundId === prev.id)) {
           prev.text += text;
         } else {
-          draftNodes.push({ text, marks: [...currentMarks] });
+          draftNodes.push({ id: foundId, text, marks: [...currentMarks] });
         }
       }
     } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -292,51 +292,40 @@ export function parseDOMToContent(
         return;
 
       const newMarks = [...currentMarks];
-
-      // --- EXISTING MARKS ---
       if (
         element.tagName === "STRONG" ||
         element.tagName === "B" ||
         parseInt(element.style.fontWeight) >= 600
-      ) {
+      )
         newMarks.push({ type: "bold" });
-      }
       if (element.tagName === "EM" || element.tagName === "I")
         newMarks.push({ type: "italic" });
       if (element.tagName === "U") newMarks.push({ type: "underline" });
-      if (element.tagName === "CODE") newMarks.push({ type: "code" });
-
-      // --- NEW: STRIKETHROUGH ---
       if (
         element.tagName === "S" ||
         element.tagName === "DEL" ||
         element.style.textDecoration.includes("line-through")
-      ) {
+      )
         newMarks.push({ type: "strike" });
-      }
+      if (element.tagName === "CODE") newMarks.push({ type: "code" });
 
       element.childNodes.forEach((child) => walk(child, newMarks));
     }
   }
   walk(el, []);
 
-  // ... (Rest of function remains identical) ...
-  // Optimization
-  if (
-    previousContent.length === 1 &&
-    draftNodes.length === 1 &&
-    areMarksEqual(previousContent[0].marks, draftNodes[0].marks)
-  ) {
-    return [
-      {
-        id: previousContent[0].id,
-        text: draftNodes[0].text,
-        marks: draftNodes[0].marks,
-      },
-    ];
+  if (previousContent.length === 1 && draftNodes.length === 1) {
+    return [{ 
+      id: previousContent[0].id, 
+      text: draftNodes[0].text, 
+      marks: draftNodes[0].marks 
+    }];
   }
 
   return draftNodes.map((draft, index) => {
+    if (draft.id) {
+        return { id: draft.id, text: draft.text, marks: draft.marks };
+    }
     const prevNode = previousContent[index];
     if (prevNode && areMarksEqual(prevNode.marks, draft.marks)) {
       return { id: prevNode.id, text: draft.text, marks: draft.marks };
@@ -344,8 +333,6 @@ export function parseDOMToContent(
     return { id: uid(), text: draft.text, marks: draft.marks };
   });
 }
-
-// --- 7. HELPERS ---
 
 export function getTextLength(content: InlineNode[]) {
   return content.reduce((acc, node) => acc + node.text.length, 0);
@@ -404,5 +391,52 @@ export function setCaretOffset(root: HTMLElement, offset: number) {
     r.collapse(false);
     selection.removeAllRanges();
     selection.addRange(r);
+  }
+}
+
+export function setSelectionRange(
+  root: HTMLElement,
+  start: number,
+  end: number
+) {
+  const selection = window.getSelection();
+  if (!selection) return;
+
+  const range = document.createRange();
+  let startNode: Node | null = null;
+  let startOffset = 0;
+  let endNode: Node | null = null;
+  let endOffset = 0;
+
+  let currentOffset = 0;
+
+  function walk(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const length = node.textContent?.length || 0;
+
+      if (!startNode && currentOffset + length >= start) {
+        startNode = node;
+        startOffset = start - currentOffset;
+      }
+      if (!endNode && currentOffset + length >= end) {
+        endNode = node;
+        endOffset = end - currentOffset;
+      }
+      currentOffset += length;
+    } else {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        walk(node.childNodes[i]);
+        if (startNode && endNode) return;
+      }
+    }
+  }
+
+  walk(root);
+
+  if (startNode && endNode) {
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 }

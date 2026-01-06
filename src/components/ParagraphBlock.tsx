@@ -39,7 +39,6 @@ export default function ParagraphBlock(props: Props) {
 
   const isEmpty = block.content.length === 0;
 
-  // FIX SHAKING: Use stable key
   const renderKey = isEmpty ? "empty" : "content";
 
   return (

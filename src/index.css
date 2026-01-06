@@ -952,3 +952,125 @@ body {
   color: #555;
   pointer-events: none;
 }
+
+.block-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Align horizontally with the first line of text */
+  margin-top: 4px; /* Default match for paragraph */
+  margin-right: 6px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.block-wrapper:hover .block-actions {
+  opacity: 1;
+}
+
+/* Hide while typing */
+.typing-mode .block-actions {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.action-btn {
+  width: 20px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-color);
+}
+
+.plus-btn:active {
+  transform: scale(0.95);
+}
+
+.drag-btn {
+  cursor: grab;
+}
+
+/* Adjust margins for Headers (similar to before) */
+.wrapper-h1 .block-actions { margin-top: 18px; }
+.wrapper-h2 .block-actions { margin-top: 14px; }
+.wrapper-h3 .block-actions { margin-top: 10px; }
+.wrapper-code .block-actions { margin-top: 6px; }
+
+
+/* --- Block Action Menu --- */
+.block-action-menu {
+  position: absolute;
+  width: 220px;
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 10001; /* Above almost everything */
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-section {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0;
+}
+.menu-section.scrollable {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #d3d3d3;
+  transition: background 0.1s;
+}
+
+.menu-item:hover {
+  background: #333;
+}
+
+.menu-item.danger {
+    color: #ff6b6b;
+}
+.menu-item.danger:hover {
+    background: rgba(255, 107, 107, 0.1);
+}
+
+.menu-icon {
+  margin-right: 10px;
+  color: #888;
+}
+.menu-item:hover .menu-icon {
+  color: #ccc;
+}
+
+.menu-divider {
+  height: 1px;
+  background: #333;
+  margin: 4px 0;
+}
+
+.menu-label {
+    font-size: 11px;
+    color: #666;
+    padding: 4px 10px;
+    text-transform: uppercase;
+    font-weight: 600;
+}

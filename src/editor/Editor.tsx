@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import BlockComponent from "../components/Block";
 import SlashMenu from "../components/SlashMenu";
 import InlineToolbar from "../components/InlineToolbar";
+import BlockActionMenu from "../components/BlockActionMenu";
 import {
   createBlock,
   flattenBlocks,
@@ -14,15 +15,10 @@ import {
   sanitizeBlock,
   normalizeEditorState,
   toggleMarkInRange,
+  duplicateBlock,
 } from "../utils";
 import { COMMANDS } from "../commands";
-import type {
-  Block,
-  BlockType,
-  InlineNode,
-  EditorSelection,
-  MarkType,
-} from "../types";
+import type { Block, BlockType, InlineNode, EditorSelection, MarkType } from "../types";
 import { useHistory } from "../hooks/useHistory";
 
 const getPlainText = (content: InlineNode[]) =>
@@ -73,12 +69,15 @@ export default function Editor() {
     y: 0,
   });
 
+  const [blockMenu, setBlockMenu] = useState<{ open: boolean; blockId: string | null; x: number; y: number; }>({
+      open: false, blockId: null, x: 0, y: 0
+  });
+
   const [isTyping, setIsTyping] = useState(false);
   const [previewType, setPreviewType] = useState<BlockType | null>(null);
 
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
 
-  // --- Global Listeners ---
   useEffect(() => {
     function onMouseMove() {
       if (isTyping) setIsTyping(false);
@@ -87,6 +86,9 @@ export default function Editor() {
       const target = e.target as HTMLElement;
       if (slashMenu.open && !target.closest(".slash-menu")) {
         setSlashMenu((prev) => ({ ...prev, open: false }));
+      }
+      if (blockMenu.open && !target.closest(".block-action-menu") && !target.closest(".drag-handle")) {
+        setBlockMenu(prev => ({ ...prev, open: false }));
       }
     }
     function onDragEnd() {
@@ -97,9 +99,13 @@ export default function Editor() {
     const handleGlobalSelection = () => {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) return;
+
       const range = sel.getRangeAt(0);
       let target = range.startContainer.parentElement;
-      while (target && !target.id) target = target.parentElement;
+      while (target && !target.id) {
+        target = target.parentElement;
+      }
+      
       const blockId = target?.id;
 
       if (blockId) {
@@ -124,13 +130,14 @@ export default function Editor() {
     window.addEventListener("mousedown", onWindowClick);
     document.addEventListener("dragend", onDragEnd);
     document.addEventListener("selectionchange", handleGlobalSelection);
+    
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mousedown", onWindowClick);
       document.removeEventListener("dragend", onDragEnd);
       document.removeEventListener("selectionchange", handleGlobalSelection);
     };
-  }, [slashMenu.open, isTyping]);
+  }, [slashMenu.open, isTyping, blockMenu.open]);
 
   useEffect(() => {
     function onWindowKeyDown(e: KeyboardEvent) {
@@ -139,16 +146,19 @@ export default function Editor() {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
       }
+      if (e.key === "Escape") {
+        setSlashMenu(prev => ({ ...prev, open: false }));
+        setBlockMenu(prev => ({ ...prev, open: false }));
+      }
     }
     window.addEventListener("keydown", onWindowKeyDown);
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [undo, redo, isTyping]);
 
-  // --- Handlers ---
-
   const handleUpdateContent = (id: string, content: InlineNode[]) => {
     const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, content }));
     setBlocks(newBlocks, false);
+
     const plainText = getPlainText(content);
     if (plainText.startsWith("/")) {
       const el = document.getElementById(id);
@@ -181,6 +191,7 @@ export default function Editor() {
   const handleToggleMark = (mark: MarkType) => {
     if (!selection || selection.isCollapsed) return;
     saveSnapshot();
+
     const { start, end } = selection;
     if (start.blockId === end.blockId) {
       const blockId = start.blockId;
@@ -201,32 +212,26 @@ export default function Editor() {
     }
   };
 
-  const handleInlineBlockConversion = (cmdType: string) => {
-    if (!focusedId) return;
+  const handleInlineBlockConversion = (cmdType: string, targetBlockId?: string) => {
+    const id = targetBlockId || focusedId;
+    if (!id) return;
+
     saveSnapshot();
     setPreviewType(null);
+
     let newType: BlockType = cmdType as BlockType;
     let newProps: any = {};
-    if (cmdType === "h1") {
-      newType = "heading";
-      newProps = { level: 1 };
-    } else if (cmdType === "h2") {
-      newType = "heading";
-      newProps = { level: 2 };
-    } else if (cmdType === "h3") {
-      newType = "heading";
-      newProps = { level: 3 };
-    } else if (cmdType === "code") {
-      newType = "code";
-      newProps = { language: "TypeScript" };
-    } else if (cmdType === "bullet-list") newType = "bullet-list";
+
+    if (cmdType === "h1") { newType = "heading"; newProps = { level: 1 }; }
+    else if (cmdType === "h2") { newType = "heading"; newProps = { level: 2 }; }
+    else if (cmdType === "h3") { newType = "heading"; newProps = { level: 3 }; }
+    else if (cmdType === "code") { newType = "code"; newProps = { language: "TypeScript" }; }
+    else if (cmdType === "bullet-list") newType = "bullet-list";
     else if (cmdType === "numbered-list") newType = "numbered-list";
     else if (cmdType === "quote") newType = "quote";
-    if (cmdType === "paragraph") {
-      newType = "paragraph";
-    }
+    if (cmdType === "paragraph") { newType = "paragraph"; }
 
-    const newBlocks = updateBlockInTree(blocks, focusedId, (b) => {
+    const newBlocks = updateBlockInTree(blocks, id, (b) => {
       const updated = {
         ...b,
         type: newType,
@@ -234,6 +239,7 @@ export default function Editor() {
       };
       return sanitizeBlock(updated);
     });
+
     setBlocks(newBlocks, false);
   };
 
@@ -247,20 +253,18 @@ export default function Editor() {
     setBlocks(newBlocks, false);
   };
 
-  // --- NEW: Add Block Below (for Upload completion) ---
   const handleAddParagraphBelow = (blockId: string) => {
     saveSnapshot();
     const newBlock = createBlock("paragraph");
     const newTree = insertAfterInTree(blocks, blockId, newBlock);
     setBlocks(newTree, false);
-    // Force Focus Next
     setTimeout(() => {
-      setFocusedId(newBlock.id);
-      setSelection({
-        start: { blockId: newBlock.id, offset: 0 },
-        end: { blockId: newBlock.id, offset: 0 },
-        isCollapsed: true,
-      });
+        setFocusedId(newBlock.id);
+        setSelection({
+          start: { blockId: newBlock.id, offset: 0 },
+          end: { blockId: newBlock.id, offset: 0 },
+          isCollapsed: true,
+        });
     }, 0);
   };
 
@@ -271,6 +275,7 @@ export default function Editor() {
     const next = index < flatBlocks.length - 1 ? flatBlocks[index + 1] : null;
 
     let newBlocks = deleteBlockFromTree(blocks, id);
+
     if (newBlocks.length === 0) {
       const newBlock = createBlock("paragraph");
       newBlocks = [newBlock];
@@ -283,7 +288,9 @@ export default function Editor() {
       });
       return;
     }
+
     setBlocks(newBlocks, false);
+
     if (prev) {
       const len = getTextLength(prev.content);
       setFocusedId(prev.id);
@@ -308,26 +315,10 @@ export default function Editor() {
 
     if (e.metaKey || e.ctrlKey) {
       const key = e.key.toLowerCase();
-      if (key === "b") {
-        e.preventDefault();
-        handleToggleMark("bold");
-        return;
-      }
-      if (key === "i") {
-        e.preventDefault();
-        handleToggleMark("italic");
-        return;
-      }
-      if (key === "u") {
-        e.preventDefault();
-        handleToggleMark("underline");
-        return;
-      }
-      if (key === "e") {
-        e.preventDefault();
-        handleToggleMark("code");
-        return;
-      }
+      if (key === "b") { e.preventDefault(); handleToggleMark("bold"); return; }
+      if (key === "i") { e.preventDefault(); handleToggleMark("italic"); return; }
+      if (key === "u") { e.preventDefault(); handleToggleMark("underline"); return; }
+      if (key === "e") { e.preventDefault(); handleToggleMark("code"); return; }
     }
 
     if (e.key === "Tab") {
@@ -338,9 +329,9 @@ export default function Editor() {
         const prevBlock = flatBlocks[currentIndex - 1];
         let tempTree = deleteBlockFromTree(blocks, id);
         tempTree = updateBlockInTree(tempTree, prevBlock.id, (parent) => ({
-          ...parent,
-          isOpen: true,
-          children: [...parent.children, block],
+            ...parent,
+            isOpen: true,
+            children: [...parent.children, block]
         }));
         setBlocks(tempTree, false);
         setTimeout(() => setFocusedId(id), 0);
@@ -396,19 +387,16 @@ export default function Editor() {
       e.preventDefault();
       saveSnapshot();
 
-      if (block.type === "drawio" || block.type === "divider") {
-        handleAddParagraphBelow(id); // Use new handler
-        return;
+      if (block.type === "drawio" || block.type === "divider" || block.type === "image") {
+          handleAddParagraphBelow(id); 
+          return;
       }
 
       const contentLen = getTextLength(block.content);
       const isList = ["bullet-list", "numbered-list"].includes(block.type);
 
       if (isList && contentLen === 0) {
-        setBlocks(
-          updateBlockInTree(blocks, id, (b) => ({ ...b, type: "paragraph" })),
-          false
-        );
+        setBlocks(updateBlockInTree(blocks, id, (b) => ({ ...b, type: "paragraph" })), false);
         return;
       }
 
@@ -430,11 +418,14 @@ export default function Editor() {
         e.preventDefault();
         saveSnapshot();
         const prevIndex = currentIndex - 1;
+
         if (prevIndex >= 0) {
           const prevBlock = flatBlocks[prevIndex];
           const prevLength = getTextLength(prevBlock.content);
+
           const newTree = deleteBlockFromTree(blocks, id);
           setBlocks(newTree, false);
+
           setFocusedId(prevBlock.id);
           setSelection({
             start: { blockId: prevBlock.id, offset: prevLength },
@@ -449,31 +440,25 @@ export default function Editor() {
   const applySlashCommand = (cmdType: string) => {
     if (!slashMenu.blockId) return;
     saveSnapshot();
+
     let newType: BlockType = cmdType as BlockType;
     let newProps: any = {};
-    if (cmdType === "h1") {
-      newType = "heading";
-      newProps = { level: 1 };
-    } else if (cmdType === "h2") {
-      newType = "heading";
-      newProps = { level: 2 };
-    } else if (cmdType === "h3") {
-      newType = "heading";
-      newProps = { level: 3 };
-    } else if (cmdType === "code") {
-      newType = "code";
-      newProps = { language: "TypeScript" };
-    } else if (cmdType === "bullet-list") newType = "bullet-list";
+
+    if (cmdType === "h1") { newType = "heading"; newProps = { level: 1 }; }
+    else if (cmdType === "h2") { newType = "heading"; newProps = { level: 2 }; }
+    else if (cmdType === "h3") { newType = "heading"; newProps = { level: 3 }; }
+    else if (cmdType === "code") { newType = "code"; newProps = { language: "TypeScript" }; }
+    else if (cmdType === "bullet-list") newType = "bullet-list";
     else if (cmdType === "numbered-list") newType = "numbered-list";
     else if (cmdType === "quote") newType = "quote";
     else if (cmdType === "divider") newType = "divider";
-    else if (cmdType === "image") {
-      newType = "image";
-      newProps = { src: "", width: 600, align: "center" };
-    }
+    
+    // Add Image
+    else if (cmdType === "image") { newType = "image"; newProps = { src: "", width: 600, align: "center" }; }
+    // Add Drawio
+    else if (cmdType === "drawio") { newType = "drawio"; newProps = { xml: "" }; }
 
-    // 1. Convert current block
-    let newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
+    const newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
       const updated = {
         ...b,
         type: newType,
@@ -482,29 +467,27 @@ export default function Editor() {
       };
       return sanitizeBlock(updated);
     });
-
-    // 2. Void block special handling (Insert below)
-    const isVoid =
-      newType === "drawio" || newType === "divider" || newType === "image";
+    
+    const isVoid = newType === "drawio" || newType === "divider" || newType === "image";
     let nextBlockId = slashMenu.blockId;
 
+    let finalTree = newBlocks;
     if (isVoid) {
-      const newBlock = createBlock("paragraph");
-      newBlocks = insertAfterInTree(newBlocks, slashMenu.blockId, newBlock);
-      nextBlockId = newBlock.id;
+         const newBlock = createBlock("paragraph");
+         finalTree = insertAfterInTree(finalTree, slashMenu.blockId, newBlock);
+         nextBlockId = newBlock.id;
     }
 
-    setBlocks(newBlocks, false);
+    setBlocks(finalTree, false);
     setSlashMenu((s) => ({ ...s, open: false }));
 
-    // 3. Focus
     setTimeout(() => {
-      setFocusedId(nextBlockId);
-      setSelection({
-        start: { blockId: nextBlockId!, offset: 0 },
-        end: { blockId: nextBlockId!, offset: 0 },
-        isCollapsed: true,
-      });
+        setFocusedId(nextBlockId);
+        setSelection({
+          start: { blockId: nextBlockId!, offset: 0 },
+          end: { blockId: nextBlockId!, offset: 0 },
+          isCollapsed: true,
+        });
     }, 0);
   };
 
@@ -512,46 +495,106 @@ export default function Editor() {
   const handleDragOver = (e: React.DragEvent, id: string) => {
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
-    const pos = e.clientY - rect.top < rect.height / 2 ? "top" : "bottom";
+    const y = e.clientY - rect.top;
+    const pos = y < rect.height / 2 ? "top" : "bottom";
     setDropTarget({ id, pos });
   };
   const handleDrop = (targetId: string) => {
-    if (!dragId || !dropTarget || dragId === targetId) {
+    if (!dragId || !dropTarget) return;
+    if (dragId === targetId) {
       setDragId(null);
       setDropTarget(null);
       return;
     }
     saveSnapshot();
     const result = findNodePath(blocks, dragId);
-    if (result) {
-      let tree = deleteBlockFromTree(blocks, dragId);
-      if (dropTarget.pos === "top")
-        tree = insertBeforeInTree(tree, targetId, result.node);
-      else tree = insertAfterInTree(tree, targetId, result.node);
-      setBlocks(tree, false);
+    if (!result) return;
+    const sourceBlock = result.node;
+    let newTree = deleteBlockFromTree(blocks, dragId);
+    
+    if (dropTarget.pos === "top") {
+        newTree = insertBeforeInTree(newTree, targetId, sourceBlock);
+    } else {
+        newTree = insertAfterInTree(newTree, targetId, sourceBlock);
     }
+    
+    setBlocks(newTree, false);
     setDragId(null);
     setDropTarget(null);
+  };
+
+  // --- NEW: Block Menu Handlers ---
+  const handleOpenBlockMenu = (e: React.MouseEvent, blockId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBlockMenu({
+          open: true,
+          blockId,
+          x: e.clientX,
+          y: e.clientY
+      });
+  };
+
+  const handleDuplicateBlock = () => {
+      if (!blockMenu.blockId) return;
+      saveSnapshot();
+      const result = findNodePath(blocks, blockMenu.blockId);
+      if (result) {
+          const clone = duplicateBlock(result.node);
+          const newTree = insertAfterInTree(blocks, blockMenu.blockId, clone);
+          setBlocks(newTree, false);
+      }
+      setBlockMenu(prev => ({ ...prev, open: false }));
+  };
+
+  const handleAddBlockAndOpenSlash = (blockId: string) => {
+      saveSnapshot();
+      const newBlock = createBlock("paragraph");
+      const newTree = insertAfterInTree(blocks, blockId, newBlock);
+      setBlocks(newTree, false);
+      
+      setTimeout(() => {
+          setFocusedId(newBlock.id);
+          setSelection({ start: { blockId: newBlock.id, offset: 0 }, end: { blockId: newBlock.id, offset: 0 }, isCollapsed: true });
+          
+          const el = document.getElementById(newBlock.id);
+          if (el) {
+              const rect = el.getBoundingClientRect();
+              setSlashMenu({
+                  open: true,
+                  blockId: newBlock.id,
+                  query: "",
+                  selectedIndex: 0,
+                  x: rect.left,
+                  y: rect.bottom + 5
+              });
+          }
+      }, 10);
   };
 
   const filteredCommands = COMMANDS.filter((c) =>
     c.label.toLowerCase().includes(slashMenu.query.toLowerCase())
   );
+
   let listCounter = 0;
-  const currentBlock = flatBlocks.find((b) => b.id === focusedId);
+  const currentBlock = flatBlocks.find(b => b.id === focusedId);
   const currentType = currentBlock?.type || "paragraph";
 
   return (
     <div className={`editor-container ${isTyping ? "typing-mode" : ""}`}>
       {blocks.map((block, index) => {
-        if (block.type === "numbered-list") listCounter++;
-        else listCounter = 0;
-        const isMenuOpenForBlock =
-          slashMenu.open && slashMenu.blockId === block.id;
-        const isRangeSelection =
-          focusedId === block.id &&
-          selection !== null &&
-          !selection.isCollapsed &&
+        if (block.type === "numbered-list") {
+          listCounter++;
+        } else {
+          listCounter = 0;
+        }
+
+        const isMenuOpenForBlock = slashMenu.open && slashMenu.blockId === block.id;
+        
+        const isRangeSelection = 
+          focusedId === block.id && 
+          selection !== null && 
+          !selection.isCollapsed && 
           selection.start.blockId === block.id;
 
         return (
@@ -567,6 +610,11 @@ export default function Editor() {
                 ? selection.start.offset
                 : null
             }
+            selectionEnd={
+              focusedId === block.id && selection?.end.blockId === block.id
+                ? selection.end.offset
+                : null
+            }
             previewType={focusedId === block.id ? previewType : null}
             isSlashMenuOpen={isMenuOpenForBlock}
             isRangeSelection={isRangeSelection}
@@ -580,6 +628,9 @@ export default function Editor() {
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+
+            onOpenBlockMenu={handleOpenBlockMenu}
+            onAddBlockAndOpenSlash={handleAddBlockAndOpenSlash}
           />
         );
       })}
@@ -602,6 +653,20 @@ export default function Editor() {
           onUpdateBlockAlign={handleUpdateBlockAlign}
           currentType={currentType}
           onPreview={(type) => setPreviewType(type)}
+        />
+      )}
+
+      {blockMenu.open && (
+        <BlockActionMenu
+           position={{ top: blockMenu.y, left: blockMenu.x }}
+           onClose={() => setBlockMenu(prev => ({ ...prev, open: false }))}
+           onDelete={() => {
+               if (blockMenu.blockId) handleDeleteBlock(blockMenu.blockId);
+           }}
+           onDuplicate={handleDuplicateBlock}
+           onTurnInto={(type) => {
+               if (blockMenu.blockId) handleInlineBlockConversion(type, blockMenu.blockId);
+           }}
         />
       )}
     </div>

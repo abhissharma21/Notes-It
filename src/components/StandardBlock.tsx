@@ -108,7 +108,7 @@ export default function StandardBlock(props: Props) {
       )}
 
       <div
-        key={renderKey} // <--- Critical Fix
+        key={renderKey} 
         ref={contentRef}
         className={wrapperClass}
         contentEditable

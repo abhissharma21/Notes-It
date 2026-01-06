@@ -10,6 +10,7 @@ import QuoteBlock from "./QuoteBlock";
 import DrawioBlock from "./DrawioBlock";
 import StandardBlock from "./StandardBlock";
 import ImageBlock from "./ImageBlock";
+import BlockActions from "./BlockActions";
 
 export interface BlockProps {
   block: Block;
@@ -18,7 +19,7 @@ export interface BlockProps {
   isSelected: boolean;
   isFocused: boolean;
   caretOffset: number | null;
-  selectionEnd?: number | null; // Optional to prevent TS errors
+  selectionEnd?: number | null; 
   isSlashMenuOpen: boolean;
   isRangeSelection: boolean;
   previewType?: BlockType | null;
@@ -33,6 +34,8 @@ export interface BlockProps {
 
   onDragStart: (id: string) => void;
   onDragOver: (e: React.DragEvent, id: string) => void;
+  onOpenBlockMenu: (e: React.MouseEvent, id: string) => void; 
+  onAddBlockAndOpenSlash: (id: string) => void;               
   onDrop: (targetId: string) => void;
 }
 
@@ -50,6 +53,8 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
     dropTarget,
     previewType,
     onAddParagraphBelow,
+    onOpenBlockMenu,
+    onAddBlockAndOpenSlash,
     ...handlers
   } = props;
 
@@ -59,7 +64,7 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
   const isDropTarget = dropTarget?.id === block.id;
   const dropPos = isDropTarget ? dropTarget.pos : null;
 
-  // --- ROUTER ---
+
   let Component;
 
   if (block.type === "code") {
@@ -86,13 +91,13 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
     Component = <StandardBlock {...props} previewType={previewType} />;
   }
 
-  // Wrapper class for drag handle alignment
+
   let wrapperClass = `wrapper-${block.type}`;
   if (block.type === "heading") {
     const level = block.props?.level || 1;
     wrapperClass = `wrapper-h${level}`;
   }
-  // Preview overrides wrapper class
+
   if (isFocused && previewType) {
     if (previewType === ("h1" as any)) wrapperClass = `wrapper-h1`;
     else if (previewType === ("h2" as any)) wrapperClass = `wrapper-h2`;
@@ -146,7 +151,12 @@ const BlockComponentRaw: React.FC<BlockProps> = (props) => {
           }
         }}
       >
-        <GripVertical size={18} />
+         <BlockActions 
+         blockId={block.id}
+         onAddBlock={() => onAddBlockAndOpenSlash(block.id)}
+         onDragStart={(e) => handlers.onDragStart(block.id)}
+         onMenuClick={(e) => onOpenBlockMenu(e, block.id)}
+      />
       </div>
 
       <div className="block-content-container">

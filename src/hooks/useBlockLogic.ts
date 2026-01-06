@@ -39,7 +39,6 @@ export function useBlockLogic({
     onUpdateContent(block.id, newContent);
   };
 
-  // 1. Restore Cursor after Typing
   useLayoutEffect(() => {
     if (cursorOffsetRef.current !== null && contentRef.current && isFocused) {
       setCaretOffset(contentRef.current, cursorOffsetRef.current);
@@ -47,9 +46,7 @@ export function useBlockLogic({
     }
   }, [block.content, isFocused]);
 
-  // 2. Restore Cursor after Navigation
   useLayoutEffect(() => {
-    // CRITICAL: If there is a native Range selection, DO NOT touch the cursor.
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return;
 
@@ -58,12 +55,8 @@ export function useBlockLogic({
     }
   }, [isFocused, caretOffset, isRangeSelection]);
 
-  // 3. Force Focus
   useEffect(() => {
     if (isSlashMenuOpen) return;
-
-    // CRITICAL: Check native selection directly.
-    // If user has highlighted text, do NOT force focus/collapse.
     const sel = window.getSelection();
     if (sel && !sel.isCollapsed) return;
 
@@ -91,7 +84,7 @@ export function useBlockLogic({
       });
       return () => cancelAnimationFrame(rafId);
     }
-  }, [isFocused, caretOffset, block.type, isSlashMenuOpen]); // Removed isRangeSelection dep to rely on native check
+  }, [isFocused, caretOffset, block.type, isSlashMenuOpen]); 
 
   return {
     contentRef,

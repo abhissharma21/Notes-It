@@ -1,9 +1,9 @@
-export type MarkType =
-  | "bold"
-  | "italic"
-  | "underline"
-  | "strike"
-  | "code"
+export type MarkType = 
+  | "bold" 
+  | "italic" 
+  | "underline" 
+  | "strike" 
+  | "code" 
   | "highlight";
 
 export interface Mark {
@@ -40,11 +40,12 @@ export interface Block {
     align?: "left" | "center" | "right";
     xml?: string;
     previewUrl?: string;
-    // --- Image Props ---
     src?: string;
     alt?: string;
-    caption?: InlineNode[]; // Structured caption
-    width?: number; // Pixel width
+    caption?: InlineNode[];
+    width?: number;
+    textColor?: string;       
+    backgroundColor?: string; 
     [key: string]: any;
   };
 }
