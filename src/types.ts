@@ -55,3 +55,26 @@ export interface EditorSelection {
   end: { blockId: string; offset: number };
   isCollapsed: boolean;
 }
+
+export type EditorOp =
+  | { type: "insert_text"; blockId: string; offset: number; text: string; }
+  | { type: "delete_text"; blockId; offset: number; length: number; }
+  | { type: "add_block"; block: Block; afterBlockId: string | null; parentId: string | null; }
+  | { type: "delete_block"; blockId: string; }
+  | { type: "update_block_props"; blockId: string; props: Partial<Block["props"]>; }
+  | { type: "set_block_type"; blockId: string; newType: BlockType; };
+
+export interface RemoteCursor {
+  clientId: string;
+  blockId: string;
+  offset: number;
+  color: string;
+  name: string;
+  lastActive: number;
+}
+
+export type CollabMessage = 
+  | { type: "init"; payload: { id: string; color: string; name: string } }
+  | { type: "op"; payload: EditorOp }
+  | { type: "cursor"; payload: RemoteCursor }
+  | { type: "client_disconnect"; payload: { clientId: string } };

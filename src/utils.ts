@@ -4,6 +4,7 @@ import {
   type Mark,
   type MarkType,
   type BlockType,
+  type EditorOp
 } from "./types";
 
 interface BlockRule {
@@ -439,4 +440,148 @@ export function setSelectionRange(
     selection.removeAllRanges();
     selection.addRange(range);
   }
+}
+
+export function applyOp(tree: Block[], op: EditorOp): Block[] {
+  switch (op.type) {
+    case "insert_text": {
+      return tree.map((node) => {
+        if (node.id === op.blockId) {
+            const plainText = node.content.map(c => c.text).join("");
+            const pre = plainText.slice(0, op.offset);
+            const post = plainText.slice(op.offset);
+            return {
+                ...node,
+                content: [{ id: uid(), text: pre + op.text + post, marks: [] }]
+            };
+        }
+        if (node.children.length > 0) {
+          return { ...node, children: applyOp(node.children, op) };
+        }
+        return node;
+      });
+    }
+
+    case "delete_text": {
+       return tree.map((node) => {
+        if (node.id === op.blockId) {
+            const plainText = node.content.map(c => c.text).join("");
+            const pre = plainText.slice(0, op.offset);
+            const post = plainText.slice(op.offset + op.length);
+            return {
+                ...node,
+                content: [{ id: uid(), text: pre + post, marks: [] }]
+            };
+        }
+        if (node.children.length > 0) {
+          return { ...node, children: applyOp(node.children, op) };
+        }
+        return node;
+      });
+    }
+
+    case "add_block": {
+      const insert = (nodes: Block[]): Block[] => {
+        const index = nodes.findIndex((n) => n.id === op.afterBlockId);
+        if (index !== -1) {
+          const newNodes = [...nodes];
+          newNodes.splice(index + 1, 0, op.block);
+          return newNodes;
+        }
+        return nodes.map((n) => ({ ...n, children: insert(n.children) }));
+      };
+
+      if (!op.parentId && op.afterBlockId) {
+         const index = tree.findIndex(n => n.id === op.afterBlockId);
+         if (index !== -1) {
+             const copy = [...tree];
+             copy.splice(index + 1, 0, op.block);
+             return copy;
+         }
+      }
+      if (!op.parentId && !op.afterBlockId) {
+          return [...tree, op.block];
+      }
+      return insert(tree);
+    }
+
+    case "delete_block": {
+      return tree
+        .filter((n) => n.id !== op.blockId)
+        .map((n) => ({ ...n, children: applyOp(n.children, op) }));
+    }
+
+    case "update_block_props": {
+      return tree.map((node) => {
+        if (node.id === op.blockId) {
+          return { ...node, props: { ...node.props, ...op.props } };
+        }
+        if (node.children.length > 0) {
+          return { ...node, children: applyOp(node.children, op) };
+        }
+        return node;
+      });
+    }
+
+    case "set_block_type": {
+        return tree.map((node) => {
+        if (node.id === op.blockId) {
+          return { ...node, type: op.newType };
+        }
+        if (node.children.length > 0) {
+          return { ...node, children: applyOp(node.children, op) };
+        }
+        return node;
+      });
+    }
+
+    default:
+      return tree;
+  }
+}
+
+export function getDomRectForBlockOffset(blockId: string, offset: number): { top: number; left: number; height: number } | null {
+  const blockEl = document.getElementById(blockId);
+  if (!blockEl) return null;
+
+  const contentEl = blockEl.querySelector('.block');
+  if (!contentEl) return null;
+
+  if (offset === 0 || !contentEl.textContent) {
+    const rect = contentEl.getBoundingClientRect();
+    return { top: rect.top, left: rect.left, height: 20 };
+  }
+
+  let currentOffset = 0;
+  const range = document.createRange();
+  let found = false;
+
+  function walk(node: Node) {
+    if (found) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const length = node.textContent?.length || 0;
+      if (currentOffset + length >= offset) {
+        range.setStart(node, offset - currentOffset);
+        range.collapse(true);
+        found = true;
+      }
+      currentOffset += length;
+    } else {
+      for (let i = 0; i < node.childNodes.length; i++) {
+        walk(node.childNodes[i]);
+      }
+    }
+  }
+
+  walk(contentEl);
+
+  if (found) {
+    const rects = range.getClientRects();
+    if (rects.length > 0) {
+      return { top: rects[0].top, left: rects[0].left, height: rects[0].height };
+    }
+  }
+  
+  const rect = contentEl.getBoundingClientRect();
+  return { top: rect.bottom - 20, left: rect.right, height: 20 };
 }

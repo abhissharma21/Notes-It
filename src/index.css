@@ -27,11 +27,10 @@ body {
   padding: 0 40px;
 }
 
-/* --- Block Wrappers & Handle Alignment --- */
 .block-wrapper {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   margin: 1px 0;
   padding: 2px 8px;
   border-radius: 4px;
@@ -48,23 +47,20 @@ body {
 
 .typing-mode .drag-handle {
   opacity: 0 !important;
-  pointer-events: none; /* Prevent accidental clicks while typing */
+  pointer-events: none;
 }
 
-/* 2. Hide handles when editor lost focus (user clicked sidebar/outside) */
 .editor-container:not(:focus-within) .drag-handle {
   opacity: 0 !important;
 }
 
-/* Ensure hover still works otherwise */
 .block-wrapper:hover .drag-handle {
-  opacity: 1; /* This will be overridden by the rules above if typing/blurred */
+  opacity: 1;
 }
 
 .drag-handle {
   opacity: 0;
-  cursor: grab;
-  width: 24px;
+  width: auto;
   height: 24px;
   display: flex;
   align-items: center;
@@ -72,9 +68,16 @@ body {
   flex-shrink: 0;
   color: var(--text-muted);
   border-radius: 4px;
-  transition: opacity 0.2s ease, background-color 0.2s ease;
+  transition: opacity 0.2s ease;
   pointer-events: auto;
 }
+
+.drag-handle:hover {
+  background-color: transparent;
+  color: var(--text-color);
+}
+
+/* --- Block Alignments (Vertical Centering) --- */
 
 .wrapper-paragraph .drag-handle,
 .wrapper-bullet-list .drag-handle,
@@ -82,44 +85,33 @@ body {
   margin-top: 4px;
 }
 
-/* Headings - Pushed down to match larger font center */
 .wrapper-h1 .drag-handle {
-  margin-top: 18px; /* (10px padding + 30px font-half) - 12px handle-half */
+  margin-top: 18px;
 }
 
 .wrapper-h2 .drag-handle {
-  margin-top: 14px; /* (8px padding + 24px font-half) - 12px handle-half */
+  margin-top: 12px;
 }
 
 .wrapper-h3 .drag-handle {
-  margin-top: 10px; /* (6px padding + 20px font-half) - 12px handle-half */
+  margin-top: 8px;
 }
 
-/* Quote - Aligns with the slightly larger/italic text */
 .wrapper-quote .drag-handle {
-  margin-top: 6px;
+  margin-top: 5px;
 }
 
-/* Code - Aligns with the Toolbar Header */
 .wrapper-code .drag-handle {
-  margin-top: 2px; /* Aligns with the language dropdown toolbar */
+  margin-top: 16px;
 }
 
-/* Divider - Centers on the line */
 .wrapper-divider .drag-handle {
   margin-top: 12px;
 }
 
-.drag-handle:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--text-color);
-}
-
-/* --- Block Styling --- */
-
 .block-content-container {
   flex: 1;
-  position: relative; /* Anchor for absolute elements */
+  position: relative;
   width: 100%;
 }
 
@@ -133,29 +125,23 @@ body {
   position: relative;
   line-height: 1.6;
   caret-color: var(--text-color);
-
-  /* --- FLUID ANIMATION --- */
-  /* This animates the font-size/weight change */
   transition: font-size 0.2s ease-out, font-weight 0.2s ease-out,
     padding 0.2s ease;
 }
 
-/* --- PLACEHOLDER LOGIC (The Fix) --- */
-/* We use data-placeholder attribute controlled by React */
 .block::before {
   content: attr(data-placeholder);
   position: absolute;
   left: 0;
   top: 0;
   color: #555;
-  pointer-events: none; /* Allows clicks to pass through to the <br> */
+  pointer-events: none;
   font-style: normal;
   display: block;
   width: 100%;
-  padding: 4px 0; /* Match padding of .block to align text perfectly */
+  padding: 4px 0;
 }
 
-/* Typography */
 .block-paragraph {
   font-size: 16px;
 }
@@ -175,7 +161,6 @@ body {
   padding-top: 6px;
 }
 
-/* Quote */
 .block-quote {
   border-left: 3px solid var(--text-muted);
   padding-left: 14px;
@@ -184,12 +169,10 @@ body {
   font-size: 18px;
   color: #ccc;
 }
-/* Indent placeholder for quote */
 .block-quote::before {
   left: 14px;
 }
 
-/* Code */
 .block-code {
   font-family: "SF Mono", Consolas, monospace;
   font-size: 14px;
@@ -199,7 +182,6 @@ body {
   color: #d4d4d4;
   tab-size: 2;
 }
-/* Indent placeholder for code */
 .block-code::before {
   left: 16px;
   top: 16px;
@@ -224,22 +206,9 @@ body {
   outline: none;
 }
 
-/* Lists */
 .block-bullet-list,
 .block-numbered-list {
   padding-left: 0;
-}
-
-/* Visual Bullet */
-.wrapper-bullet-list .block-content-container::before {
-  content: "•";
-  position: absolute;
-  left: 0;
-  top: 4px;
-  color: var(--text-muted);
-  font-size: 20px;
-  line-height: 1.6;
-  pointer-events: none;
 }
 
 .wrapper-bullet-list .block-content-container::before,
@@ -247,7 +216,6 @@ body {
   display: none;
 }
 
-/* Visual Number (Static for CSS, Dynamic if using React) */
 .wrapper-numbered-list .block-content-container::before {
   content: "1.";
   position: absolute;
@@ -261,13 +229,11 @@ body {
   pointer-events: none;
 }
 
-/* Indent placeholder for lists so it doesn't overlap bullet */
 .block-bullet-list::before,
 .block-numbered-list::before {
-  left: 0; /* Align with text start */
+  left: 0;
 }
 
-/* --- TREE STRUCTURE --- */
 .tree-node {
   width: 100%;
 }
@@ -363,111 +329,112 @@ body {
   background: #333;
 }
 
-/* --- Slash Menu --- */
 .slash-menu {
-  position: absolute;
+  position: fixed;
   background: var(--menu-bg);
-  border-radius: 6px;
+  border-radius: 8px;
   box-shadow: var(--menu-shadow);
   width: 320px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: 6px;
   font-family: var(--font-family);
+  border: 1px solid var(--menu-border);
 }
-.slash-header {
-  padding: 8px 12px;
-  font-size: 14px;
-  color: #fff;
-  border-bottom: 1px solid #333;
-  margin-bottom: 4px;
-}
-.slash-header-text {
-  font-family: monospace;
-  color: #999;
-}
+
 .slash-list {
-  max-height: 300px;
+  max-height: 280px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
+
 .slash-list::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
+
 .slash-list::-webkit-scrollbar-thumb {
   background: #444;
-  border-radius: 3px;
+  border-radius: 2px;
 }
+
 .slash-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 10px;
-  border-radius: 4px;
+  padding: 8px 10px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: background 0.05s ease;
+  transition: background 0.1s ease;
   color: var(--text-color);
 }
+
 .slash-item.active {
   background: var(--menu-item-active);
 }
+
 .slash-item-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
+
 .slash-icon {
-  color: #fff;
-  opacity: 0.8;
+  color: #ccc;
+  opacity: 0.9;
   border: 1px solid #444;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: 5px;
   background: #333;
   box-sizing: content-box;
   width: 16px;
   height: 16px;
 }
+
 .slash-item-label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
 }
+
 .slash-shortcut {
   font-size: 11px;
-  color: #555;
-  font-family: monospace;
+  color: #666;
 }
+
 .slash-empty {
-  padding: 12px;
+  padding: 16px;
   font-size: 13px;
   color: #666;
   text-align: center;
 }
+
 .slash-footer {
   border-top: 1px solid #333;
-  margin-top: 4px;
-  padding: 8px 12px;
+  margin-top: 6px;
+  padding: 8px 10px;
   display: flex;
   justify-content: space-between;
   font-size: 11px;
   color: #555;
 }
+
 .slash-preview {
   position: absolute;
-  left: 100%;
+  left: calc(100% + 12px);
   top: 0;
-  margin-left: 12px;
   width: 240px;
-  background: #252525;
-  border-radius: 6px;
+  background: var(--menu-bg);
+  border-radius: 8px;
   box-shadow: var(--menu-shadow);
+  border: 1px solid var(--menu-border);
   overflow: hidden;
   opacity: 0;
   animation: fadeIn 0.2s forwards;
   pointer-events: none;
 }
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -478,6 +445,7 @@ body {
     transform: translateX(0);
   }
 }
+
 .preview-graphic {
   background: #ffffff;
   padding: 16px;
@@ -487,16 +455,19 @@ body {
   justify-content: center;
   border-bottom: 1px solid #333;
 }
+
 .preview-desc {
   background: #252525;
   padding: 12px;
 }
+
 .preview-desc-title {
   color: #fff;
   font-size: 12px;
   font-weight: 600;
   margin-bottom: 4px;
 }
+
 .preview-shortcut {
   color: #666;
   font-weight: normal;
@@ -506,31 +477,37 @@ body {
   padding: 1px 4px;
   border-radius: 3px;
 }
+
 .preview-desc-text {
   color: #888;
   font-size: 11px;
   line-height: 1.4;
 }
+
 .preview-text-sm {
   font-size: 8px;
   color: #000;
   line-height: 1.6;
 }
+
 .preview-h1 {
   font-size: 24px;
   font-weight: 700;
   color: #000;
 }
+
 .preview-h2 {
   font-size: 20px;
   font-weight: 600;
   color: #000;
 }
+
 .preview-h3 {
   font-size: 16px;
   font-weight: 600;
   color: #000;
 }
+
 .preview-ul,
 .preview-ol {
   font-size: 10px;
@@ -538,6 +515,7 @@ body {
   padding-left: 16px;
   margin: 0;
 }
+
 .preview-quote {
   font-size: 12px;
   font-style: italic;
@@ -545,6 +523,7 @@ body {
   border-left: 2px solid #000;
   padding-left: 8px;
 }
+
 .preview-code {
   background: #2d2d2d;
   width: 100%;
@@ -554,6 +533,7 @@ body {
   font-size: 10px;
   color: #ccc;
 }
+
 .preview-divider {
   width: 100%;
   height: 1px;
@@ -601,7 +581,6 @@ body {
   overflow-y: auto;
 }
 
-/* Custom scrollbar for dropdown */
 .dropdown-list::-webkit-scrollbar {
   width: 4px;
 }
@@ -670,7 +649,7 @@ body {
 
 .preview-placeholder {
   height: 150px;
-  background: #1e1e1e; /* Dark placeholder for dark mode */
+  background: #1e1e1e;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -709,7 +688,6 @@ body {
   background: #ff5555;
 }
 
-/* Editor & Loader */
 .close-edit-btn {
   position: absolute;
   top: 10px;
@@ -754,7 +732,6 @@ body {
   }
 }
 
-/* Delete Button on Empty State */
 .delete-btn-overlay {
   position: absolute;
   right: 8px;
@@ -801,7 +778,6 @@ body {
   align-items: center;
 }
 
-/* Image Container */
 .block-image-container {
   margin: 12px 0;
   position: relative;
@@ -871,19 +847,17 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer; /* Force pointer cursor */
+    cursor: pointer;
     color: #ccc;
-    overflow: hidden; /* Contain the input */
+    overflow: hidden;
     transition: background 0.1s;
 }
 
-/* Hover effect on wrapper (triggered when hovering input) */
 .replace-image-wrapper:hover {
     background: rgba(255,255,255,0.1);
     color: #fff;
 }
 
-/* Invisible Input covering the wrapper */
 .replace-image-wrapper input {
     position: absolute;
     top: 0;
@@ -891,24 +865,23 @@ body {
     width: 100%;
     height: 100%;
     opacity: 0;
-    cursor: pointer; /* Ensure pointer cursor on input itself */
+    cursor: pointer;
     z-index: 10;
     font-size: 0;
 }
 
-/* --- PILL RESIZE HANDLES --- */
 .resize-handle-pill {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   width: 6px;
-  height: 48px; /* Height of the pill */
-  background-color: rgba(0, 0, 0, 0.5); /* Dark fill */
-  border: 1px solid rgba(255, 255, 255, 0.8); /* White outline */
+  height: 48px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.8);
   border-radius: 12px;
   cursor: col-resize;
   z-index: 15;
-  opacity: 0; /* Hidden by default */
+  opacity: 0;
   transition: opacity 0.2s ease, background-color 0.2s;
   pointer-events: auto;
 }
@@ -920,7 +893,6 @@ body {
   right: 12px;
 }
 
-/* Show on wrapper hover or focus */
 .block-image-container:hover .resize-handle-pill,
 .block-image-container.focused .resize-handle-pill {
   opacity: 1;
@@ -933,7 +905,7 @@ body {
 
 .image-caption {
   margin-top: 8px;
-  text-align: left; /* FIX: Align Left */
+  text-align: left;
   color: #888;
   font-size: 13px;
   outline: none;
@@ -941,7 +913,7 @@ body {
   padding: 2px 4px;
   border-radius: 4px;
   transition: background 0.2s;
-  width: 100%; /* Ensure it fills the wrapper to align properly */
+  width: 100%;
 }
 .image-caption:focus {
   color: #ccc;
@@ -956,27 +928,26 @@ body {
 .block-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  /* Align horizontally with the first line of text */
-  margin-top: 4px; /* Default match for paragraph */
-  margin-right: 6px;
+  justify-content: center; /* Enforce alignment */
+  gap: 0;
+  margin-right: 2px;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity 0.1s ease;
+  height: 24px; /* Ensure container matches button height */
 }
 
 .block-wrapper:hover .block-actions {
   opacity: 1;
 }
 
-/* Hide while typing */
 .typing-mode .block-actions {
   opacity: 0 !important;
   pointer-events: none;
 }
 
 .action-btn {
-  width: 20px;
+  width: 24px;
   height: 24px;
   display: flex;
   align-items: center;
@@ -985,6 +956,15 @@ body {
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
+  font-size: 16px;
+  line-height: 0; /* Important for alignment */
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.action-btn svg {
+  display: block; /* Ensure icons are blocks */
 }
 
 .action-btn:hover {
@@ -1000,14 +980,6 @@ body {
   cursor: grab;
 }
 
-/* Adjust margins for Headers (similar to before) */
-.wrapper-h1 .block-actions { margin-top: 18px; }
-.wrapper-h2 .block-actions { margin-top: 14px; }
-.wrapper-h3 .block-actions { margin-top: 10px; }
-.wrapper-code .block-actions { margin-top: 6px; }
-
-
-/* --- Block Action Menu --- */
 .block-action-menu {
   position: absolute;
   width: 220px;
@@ -1015,7 +987,7 @@ body {
   border: 1px solid #333;
   border-radius: 6px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  z-index: 10001; /* Above almost everything */
+  z-index: 10001;
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -1073,4 +1045,36 @@ body {
     padding: 4px 10px;
     text-transform: uppercase;
     font-weight: 600;
+}
+
+.slash-filter-placeholder {
+  position: fixed;
+  pointer-events: none;
+  color: var(--text-muted);
+  font-family: var(--font-family);
+  font-size: 16px;
+  z-index: 9998;
+  opacity: 0.6;
+}
+
+.remote-cursor {
+  position: absolute;
+  width: 2px;
+  pointer-events: none;
+  z-index: 10002;
+  transition: top 0.1s ease, left 0.1s ease;
+}
+
+.remote-cursor-label {
+  position: absolute;
+  top: -18px;
+  left: -2px;
+  padding: 2px 6px;
+  border-radius: 4px 4px 4px 0;
+  font-size: 10px;
+  color: #fff;
+  white-space: nowrap;
+  font-weight: 600;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }

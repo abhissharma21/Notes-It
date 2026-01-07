@@ -11,7 +11,6 @@ interface Props {
 export default function BlockActions({ blockId, onAddBlock, onDragStart, onMenuClick }: Props) {
   return (
     <div className="block-actions" contentEditable={false}>
-      {/* Plus Button */}
       <div 
         className="action-btn plus-btn" 
         onClick={(e) => {
@@ -22,14 +21,11 @@ export default function BlockActions({ blockId, onAddBlock, onDragStart, onMenuC
       >
         <Plus size={16} />
       </div>
-
-      {/* Drag Handle / Menu Trigger */}
       <div 
         className="action-btn drag-btn drag-handle" 
         draggable
         onDragStart={onDragStart}
         onMouseDown={(e) => {
-            // Prevent focus loss on simple click, but allow drag
             if (e.button === 0) e.stopPropagation(); 
         }}
         onClick={onMenuClick}

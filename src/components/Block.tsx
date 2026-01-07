@@ -1,5 +1,4 @@
 import React, { useRef, useState } from "react";
-import { GripVertical } from "lucide-react";
 import type { Block, InlineNode, BlockType } from "../types";
 import CodeBlock from "./CodeBlock";
 import ParagraphBlock from "./ParagraphBlock";

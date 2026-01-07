@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getPreview } from "../commands";
 import type { Command } from "./types";
 
@@ -8,7 +8,7 @@ interface Props {
   commands: Command[];
   selectedIndex: number;
   onSelect: (command: Command) => void;
-  onClose: () => void; // Used for click-outside check logic if needed
+  onClose: () => void;
 }
 
 export default function SlashMenu({
@@ -19,13 +19,30 @@ export default function SlashMenu({
   onSelect,
 }: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState({ x: position.x, y: position.y });
   const selectedCommand = commands[selectedIndex];
 
-  // Auto-scroll to selected item
   useEffect(() => {
-    const el = menuRef.current?.children[1]?.children[
-      selectedIndex
-    ] as HTMLElement; // [0] is header, [1] is list
+    if (menuRef.current) {
+      const rect = menuRef.current.getBoundingClientRect();
+      let newX = position.x;
+      let newY = position.y;
+
+      if (newY + rect.height > window.innerHeight) {
+        newY = position.y - rect.height - 30; 
+      }
+
+      if (newX + rect.width > window.innerWidth) {
+        newX = window.innerWidth - rect.width - 20;
+      }
+
+      setCoords({ x: newX, y: newY });
+    }
+  }, [position, commands.length]);
+
+  useEffect(() => {
+    const listContainer = menuRef.current?.querySelector(".slash-list");
+    const el = listContainer?.children[selectedIndex] as HTMLElement;
     if (el) {
       el.scrollIntoView({ block: "nearest" });
     }
@@ -35,17 +52,9 @@ export default function SlashMenu({
     <div
       ref={menuRef}
       className="slash-menu"
-      style={{ top: position.y, left: position.x }}
-      onMouseDown={(e) => e.preventDefault()} // Prevent focus loss
+      style={{ top: coords.y, left: coords.x, position: 'fixed' }}
+      onMouseDown={(e) => e.preventDefault()}
     >
-      {/* 1. Filter Header (always shows current query) */}
-      <div className="slash-header">
-        <span className="slash-header-text">
-          /{query || "Type a command..."}
-        </span>
-      </div>
-
-      {/* 2. Command List */}
       <div className="slash-list">
         {commands.length > 0 ? (
           commands.map((cmd, i) => (
@@ -53,10 +62,6 @@ export default function SlashMenu({
               key={cmd.type}
               className={`slash-item ${i === selectedIndex ? "active" : ""}`}
               onClick={() => onSelect(cmd)}
-              onMouseEnter={() => {
-                // Optional: Hover syncs index?
-                // Usually handled by parent keydown, but mouse hover nice-to-have
-              }}
             >
               <div className="slash-item-left">
                 <cmd.icon size={16} className="slash-icon" />
@@ -71,13 +76,10 @@ export default function SlashMenu({
             </div>
           ))
         ) : (
-          // "If no filter is present do not show no result found just show the filter value"
-          // The header handles showing the filter value. We just render empty list body.
           <div className="slash-empty">No matching commands</div>
         )}
       </div>
 
-      {/* 3. Footer */}
       <div className="slash-footer">
         <div className="slash-footer-section">
           <span className="slash-key">Type '/' on the page</span>
@@ -87,7 +89,6 @@ export default function SlashMenu({
         </div>
       </div>
 
-      {/* 4. Preview Side Panel */}
       {selectedCommand && (
         <div className="slash-preview">
           {getPreview(selectedCommand)}

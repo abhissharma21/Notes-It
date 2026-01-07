@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import BlockComponent from "../components/Block";
 import SlashMenu from "../components/SlashMenu";
 import InlineToolbar from "../components/InlineToolbar";
 import BlockActionMenu from "../components/BlockActionMenu";
+import RemoteCursorOverlay from "../components/RemoteCursorOverlay"; // Import Overlay
 import {
   createBlock,
   flattenBlocks,
@@ -16,16 +17,21 @@ import {
   normalizeEditorState,
   toggleMarkInRange,
   duplicateBlock,
+  applyOp,
 } from "../utils";
 import { COMMANDS } from "../commands";
-import type { Block, BlockType, InlineNode, EditorSelection, MarkType } from "../types";
+import type { Block, BlockType, InlineNode, EditorSelection, MarkType, EditorOp } from "../types";
 import { useHistory } from "../hooks/useHistory";
+import { useCollab } from "../hooks/useCollab";
 
 const getPlainText = (content: InlineNode[]) =>
   content.map((n) => n.text).join("");
 
 export default function Editor() {
-  const [initialBlock] = useState(() => createBlock("paragraph", ""));
+  const [initialBlock] = useState(() => ({
+    ...createBlock("paragraph", ""),
+    id: "shared-root-block" 
+  }));
 
   const {
     state: blocks,
@@ -35,7 +41,11 @@ export default function Editor() {
     saveSnapshot,
   } = useHistory<Block[]>([initialBlock]);
 
+  const blocksRef = useRef(blocks);
+  useEffect(() => { blocksRef.current = blocks; }, [blocks]);
+
   const setBlocks = (newBlocks: Block[], save: boolean) => {
+    blocksRef.current = newBlocks;
     const normalized = normalizeEditorState(newBlocks);
     setBlocksRaw(normalized, save);
   };
@@ -60,6 +70,7 @@ export default function Editor() {
     selectedIndex: number;
     x: number;
     y: number;
+    top: number;
   }>({
     open: false,
     blockId: null,
@@ -67,6 +78,7 @@ export default function Editor() {
     selectedIndex: 0,
     x: 0,
     y: 0,
+    top: 0,
   });
 
   const [blockMenu, setBlockMenu] = useState<{ open: boolean; blockId: string | null; x: number; y: number; }>({
@@ -77,6 +89,30 @@ export default function Editor() {
   const [previewType, setPreviewType] = useState<BlockType | null>(null);
 
   const flatBlocks = useMemo(() => flattenBlocks(blocks), [blocks]);
+
+  const dispatch = useCallback((op: EditorOp, applyLocally: boolean, broadcast: boolean) => {
+    if (applyLocally) {
+      const currentBlocks = blocksRef.current;
+      const newBlocks = applyOp(currentBlocks, op);
+      setBlocks(newBlocks, false);
+    }
+    
+    if (broadcast) {
+      broadcastOp(op);
+    }
+  }, [blocksRef]);
+
+  // Use Collab Hook with Cursor Support
+  const { broadcastOp, broadcastCursor, remoteCursors } = useCollab((op) => {
+    dispatch(op, true, false);
+  });
+
+  // Broadcast Cursor on Selection Change
+  useEffect(() => {
+    if (selection && selection.isCollapsed) {
+      broadcastCursor(selection.start.blockId, selection.start.offset);
+    }
+  }, [selection, broadcastCursor]);
 
   useEffect(() => {
     function onMouseMove() {
@@ -156,32 +192,90 @@ export default function Editor() {
   }, [undo, redo, isTyping]);
 
   const handleUpdateContent = (id: string, content: InlineNode[]) => {
-    const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, content }));
+    const newText = getPlainText(content);
+    const currentFlat = flattenBlocks(blocksRef.current);
+    const oldBlock = currentFlat.find(b => b.id === id);
+    const oldText = oldBlock ? getPlainText(oldBlock.content) : "";
+
+    if (newText.length > oldText.length) {
+      const diff = newText.length - oldText.length;
+      const offset = selection?.start.offset ?? oldText.length; 
+      const safeOffset = Math.min(offset, oldText.length);
+      const char = newText.slice(safeOffset, safeOffset + diff);
+      
+      dispatch({
+        type: "insert_text",
+        blockId: id,
+        offset: safeOffset,
+        text: char
+      }, false, true); 
+
+    } else if (newText.length < oldText.length) {
+      const diff = oldText.length - newText.length;
+      const offset = selection?.start.offset ?? (oldText.length - diff);
+      
+      dispatch({
+        type: "delete_text",
+        blockId: id,
+        offset: offset,
+        length: diff
+      }, false, true); 
+    }
+
+    const newBlocks = updateBlockInTree(blocksRef.current, id, (b) => ({ ...b, content }));
     setBlocks(newBlocks, false);
 
-    const plainText = getPlainText(content);
-    if (plainText.startsWith("/")) {
-      const el = document.getElementById(id);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        setSlashMenu({
-          open: true,
-          blockId: id,
-          query: plainText.slice(1),
-          selectedIndex: 0,
-          x: rect.left,
-          y: rect.bottom + 5,
-        });
-      }
+    // Broadcast cursor position while typing
+    const newOffset = (selection?.start.offset ?? 0) + (newText.length - oldText.length);
+    broadcastCursor(id, newOffset);
+
+    if (newText.includes("/")) {
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          let rect = range.getBoundingClientRect();
+
+          if (rect.left === 0 && rect.top === 0) {
+            const clientRects = range.getClientRects();
+            if (clientRects.length > 0) rect = clientRects[0];
+          }
+          
+          const lastSlashIndex = newText.lastIndexOf("/");
+          const queryText = newText.slice(lastSlashIndex + 1);
+
+          setSlashMenu({
+            open: true,
+            blockId: id,
+            query: queryText,
+            selectedIndex: 0,
+            x: rect.left,
+            y: rect.bottom + 4,
+            top: rect.top,
+          });
+        }
+      }, 0);
     } else {
       if (slashMenu.open) setSlashMenu((prev) => ({ ...prev, open: false }));
     }
   };
 
+  // ... (Keep handleUpdateMetadata, handleSelectionChange, handleToggleMark as is)
+  // ... (Keep handleInlineBlockConversion, handleUpdateBlockAlign as is)
+  // ... (Keep handleAddParagraphBelow, handleDeleteBlock as is)
+  // ... (Keep handleKeyDown, applySlashCommand, drag/drop handlers as is)
+  
+  // NOTE: Re-paste the rest of the file logic from previous steps here 
+  // (omitted for brevity since the change was just adding RemoteCursorOverlay and broadcastCursor calls)
+  
+  // ... Paste logic from previous Editor.tsx ...
   const handleUpdateMetadata = (id: string, meta: Partial<Block>) => {
     saveSnapshot();
-    const newBlocks = updateBlockInTree(blocks, id, (b) => ({ ...b, ...meta }));
-    setBlocks(newBlocks, false);
+    dispatch({
+      type: "update_block_props",
+      blockId: id,
+      props: meta.props || {}
+    }, true, true);
   };
 
   const handleSelectionChange = (id: string, offset: number) => {
@@ -203,7 +297,7 @@ export default function Editor() {
           end.offset,
           mark
         );
-        const newBlocks = updateBlockInTree(blocks, blockId, (b) => ({
+        const newBlocks = updateBlockInTree(blocksRef.current, blockId, (b) => ({
           ...b,
           content: newContent,
         }));
@@ -231,33 +325,39 @@ export default function Editor() {
     else if (cmdType === "quote") newType = "quote";
     if (cmdType === "paragraph") { newType = "paragraph"; }
 
-    const newBlocks = updateBlockInTree(blocks, id, (b) => {
-      const updated = {
-        ...b,
-        type: newType,
-        props: { ...b.props, ...newProps },
-      };
-      return sanitizeBlock(updated);
-    });
-
-    setBlocks(newBlocks, false);
+    dispatch({
+        type: "update_block_props",
+        blockId: id,
+        props: newProps
+    }, true, true);
+    
+    dispatch({
+        type: "set_block_type",
+        blockId: id,
+        newType
+    }, true, true);
   };
 
   const handleUpdateBlockAlign = (align: "left" | "center" | "right") => {
     if (!focusedId) return;
     saveSnapshot();
-    const newBlocks = updateBlockInTree(blocks, focusedId, (b) => ({
-      ...b,
-      props: { ...b.props, align },
-    }));
-    setBlocks(newBlocks, false);
+    dispatch({
+        type: "update_block_props",
+        blockId: focusedId,
+        props: { align }
+    }, true, true);
   };
 
   const handleAddParagraphBelow = (blockId: string) => {
     saveSnapshot();
     const newBlock = createBlock("paragraph");
-    const newTree = insertAfterInTree(blocks, blockId, newBlock);
-    setBlocks(newTree, false);
+    dispatch({
+        type: "add_block",
+        block: newBlock,
+        afterBlockId: blockId,
+        parentId: null
+    }, true, true);
+    
     setTimeout(() => {
         setFocusedId(newBlock.id);
         setSelection({
@@ -270,26 +370,27 @@ export default function Editor() {
 
   const handleDeleteBlock = (id: string) => {
     saveSnapshot();
-    const index = flatBlocks.findIndex((b) => b.id === id);
-    const prev = index > 0 ? flatBlocks[index - 1] : null;
-    const next = index < flatBlocks.length - 1 ? flatBlocks[index + 1] : null;
+    const currentFlat = flattenBlocks(blocksRef.current);
+    const index = currentFlat.findIndex((b) => b.id === id);
+    const prev = index > 0 ? currentFlat[index - 1] : null;
+    const next = index < currentFlat.length - 1 ? currentFlat[index + 1] : null;
 
-    let newBlocks = deleteBlockFromTree(blocks, id);
+    dispatch({
+      type: "delete_block",
+      blockId: id
+    }, true, true);
 
-    if (newBlocks.length === 0) {
-      const newBlock = createBlock("paragraph");
-      newBlocks = [newBlock];
-      setBlocks(newBlocks, false);
-      setFocusedId(newBlock.id);
-      setSelection({
-        start: { blockId: newBlock.id, offset: 0 },
-        end: { blockId: newBlock.id, offset: 0 },
-        isCollapsed: true,
-      });
-      return;
+    if (blocksRef.current.length <= 1) { 
+       const newBlock = createBlock("paragraph");
+       dispatch({
+         type: "add_block",
+         block: newBlock,
+         afterBlockId: null,
+         parentId: null
+       }, true, true);
+       setFocusedId(newBlock.id);
+       return;
     }
-
-    setBlocks(newBlocks, false);
 
     if (prev) {
       const len = getTextLength(prev.content);
@@ -310,8 +411,9 @@ export default function Editor() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
-    const currentIndex = flatBlocks.findIndex((b) => b.id === id);
-    const block = flatBlocks[currentIndex];
+    const currentFlat = flattenBlocks(blocksRef.current);
+    const currentIndex = currentFlat.findIndex((b) => b.id === id);
+    const block = currentFlat[currentIndex];
 
     if (e.metaKey || e.ctrlKey) {
       const key = e.key.toLowerCase();
@@ -326,14 +428,18 @@ export default function Editor() {
       saveSnapshot();
       if (e.shiftKey) return;
       if (currentIndex > 0) {
-        const prevBlock = flatBlocks[currentIndex - 1];
-        let tempTree = deleteBlockFromTree(blocks, id);
+        const prevBlock = currentFlat[currentIndex - 1];
+        
+        dispatch({ type: "delete_block", blockId: id }, true, true);
+        
+        let tempTree = deleteBlockFromTree(blocksRef.current, id);
         tempTree = updateBlockInTree(tempTree, prevBlock.id, (parent) => ({
             ...parent,
             isOpen: true,
             children: [...parent.children, block]
         }));
         setBlocks(tempTree, false);
+        
         setTimeout(() => setFocusedId(id), 0);
       }
       return;
@@ -375,12 +481,12 @@ export default function Editor() {
 
     if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (currentIndex > 0) setFocusedId(flatBlocks[currentIndex - 1].id);
+      if (currentIndex > 0) setFocusedId(currentFlat[currentIndex - 1].id);
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (currentIndex < flatBlocks.length - 1)
-        setFocusedId(flatBlocks[currentIndex + 1].id);
+      if (currentIndex < currentFlat.length - 1)
+        setFocusedId(currentFlat[currentIndex + 1].id);
     }
 
     if (e.key === "Enter" && !e.shiftKey) {
@@ -396,14 +502,24 @@ export default function Editor() {
       const isList = ["bullet-list", "numbered-list"].includes(block.type);
 
       if (isList && contentLen === 0) {
-        setBlocks(updateBlockInTree(blocks, id, (b) => ({ ...b, type: "paragraph" })), false);
+        dispatch({
+            type: "set_block_type",
+            blockId: id,
+            newType: "paragraph"
+        }, true, true);
         return;
       }
 
       const nextType = isList ? block.type : "paragraph";
       const newBlock = createBlock(nextType);
-      const newTree = insertAfterInTree(blocks, id, newBlock);
-      setBlocks(newTree, false);
+      
+      dispatch({
+          type: "add_block",
+          block: newBlock,
+          afterBlockId: id,
+          parentId: null
+      }, true, true);
+
       setFocusedId(newBlock.id);
       setSelection({
         start: { blockId: newBlock.id, offset: 0 },
@@ -414,17 +530,19 @@ export default function Editor() {
 
     if (e.key === "Backspace") {
       const length = getTextLength(block.content);
-      if (length === 0 && blocks.length > 1) {
+      if (length === 0 && blocksRef.current.length > 1) {
         e.preventDefault();
         saveSnapshot();
         const prevIndex = currentIndex - 1;
 
         if (prevIndex >= 0) {
-          const prevBlock = flatBlocks[prevIndex];
+          const prevBlock = currentFlat[prevIndex];
           const prevLength = getTextLength(prevBlock.content);
 
-          const newTree = deleteBlockFromTree(blocks, id);
-          setBlocks(newTree, false);
+          dispatch({
+              type: "delete_block",
+              blockId: id
+          }, true, true);
 
           setFocusedId(prevBlock.id);
           setSelection({
@@ -452,43 +570,43 @@ export default function Editor() {
     else if (cmdType === "numbered-list") newType = "numbered-list";
     else if (cmdType === "quote") newType = "quote";
     else if (cmdType === "divider") newType = "divider";
-    
-    // Add Image
     else if (cmdType === "image") { newType = "image"; newProps = { src: "", width: 600, align: "center" }; }
-    // Add Drawio
     else if (cmdType === "drawio") { newType = "drawio"; newProps = { xml: "" }; }
 
-    const newBlocks = updateBlockInTree(blocks, slashMenu.blockId, (b) => {
-      const updated = {
-        ...b,
-        type: newType,
-        content: [],
-        props: { ...b.props, ...newProps },
-      };
-      return sanitizeBlock(updated);
-    });
+    dispatch({
+        type: "update_block_props",
+        blockId: slashMenu.blockId,
+        props: newProps
+    }, true, true);
+    
+    dispatch({
+        type: "set_block_type",
+        blockId: slashMenu.blockId,
+        newType
+    }, true, true);
     
     const isVoid = newType === "drawio" || newType === "divider" || newType === "image";
-    let nextBlockId = slashMenu.blockId;
-
-    let finalTree = newBlocks;
+    
     if (isVoid) {
          const newBlock = createBlock("paragraph");
-         finalTree = insertAfterInTree(finalTree, slashMenu.blockId, newBlock);
-         nextBlockId = newBlock.id;
+         dispatch({
+             type: "add_block",
+             block: newBlock,
+             afterBlockId: slashMenu.blockId,
+             parentId: null
+         }, true, true);
+         
+         setTimeout(() => {
+            setFocusedId(newBlock.id);
+            setSelection({
+              start: { blockId: newBlock.id, offset: 0 },
+              end: { blockId: newBlock.id, offset: 0 },
+              isCollapsed: true,
+            });
+        }, 0);
     }
 
-    setBlocks(finalTree, false);
     setSlashMenu((s) => ({ ...s, open: false }));
-
-    setTimeout(() => {
-        setFocusedId(nextBlockId);
-        setSelection({
-          start: { blockId: nextBlockId!, offset: 0 },
-          end: { blockId: nextBlockId!, offset: 0 },
-          isCollapsed: true,
-        });
-    }, 0);
   };
 
   const handleDragStart = (id: string) => setDragId(id);
@@ -507,23 +625,22 @@ export default function Editor() {
       return;
     }
     saveSnapshot();
-    const result = findNodePath(blocks, dragId);
+    const result = findNodePath(blocksRef.current, dragId);
     if (!result) return;
     const sourceBlock = result.node;
-    let newTree = deleteBlockFromTree(blocks, dragId);
     
-    if (dropTarget.pos === "top") {
-        newTree = insertBeforeInTree(newTree, targetId, sourceBlock);
-    } else {
-        newTree = insertAfterInTree(newTree, targetId, sourceBlock);
-    }
+    dispatch({ type: "delete_block", blockId: dragId }, true, true);
+    dispatch({
+        type: "add_block",
+        block: sourceBlock,
+        afterBlockId: dropTarget.pos === "bottom" ? targetId : null, 
+        parentId: null
+    }, true, true);
     
-    setBlocks(newTree, false);
     setDragId(null);
     setDropTarget(null);
   };
 
-  // --- NEW: Block Menu Handlers ---
   const handleOpenBlockMenu = (e: React.MouseEvent, blockId: string) => {
       e.preventDefault();
       e.stopPropagation();
@@ -538,11 +655,15 @@ export default function Editor() {
   const handleDuplicateBlock = () => {
       if (!blockMenu.blockId) return;
       saveSnapshot();
-      const result = findNodePath(blocks, blockMenu.blockId);
+      const result = findNodePath(blocksRef.current, blockMenu.blockId);
       if (result) {
           const clone = duplicateBlock(result.node);
-          const newTree = insertAfterInTree(blocks, blockMenu.blockId, clone);
-          setBlocks(newTree, false);
+          dispatch({
+              type: "add_block",
+              block: clone,
+              afterBlockId: blockMenu.blockId,
+              parentId: null
+          }, true, true);
       }
       setBlockMenu(prev => ({ ...prev, open: false }));
   };
@@ -550,8 +671,13 @@ export default function Editor() {
   const handleAddBlockAndOpenSlash = (blockId: string) => {
       saveSnapshot();
       const newBlock = createBlock("paragraph");
-      const newTree = insertAfterInTree(blocks, blockId, newBlock);
-      setBlocks(newTree, false);
+      
+      dispatch({
+          type: "add_block",
+          block: newBlock,
+          afterBlockId: blockId,
+          parentId: null
+      }, true, true);
       
       setTimeout(() => {
           setFocusedId(newBlock.id);
@@ -566,7 +692,8 @@ export default function Editor() {
                   query: "",
                   selectedIndex: 0,
                   x: rect.left,
-                  y: rect.bottom + 5
+                  y: rect.bottom,
+                  top: rect.top,
               });
           }
       }, 10);
@@ -577,11 +704,16 @@ export default function Editor() {
   );
 
   let listCounter = 0;
-  const currentBlock = flatBlocks.find(b => b.id === focusedId);
+  const currentFlatRef = useMemo(() => flattenBlocks(blocks), [blocks]);
+  const currentBlock = currentFlatRef.find(b => b.id === focusedId);
   const currentType = currentBlock?.type || "paragraph";
 
   return (
     <div className={`editor-container ${isTyping ? "typing-mode" : ""}`}>
+      
+      {/* RENDER REMOTE CURSORS */}
+      <RemoteCursorOverlay cursors={remoteCursors} />
+
       {blocks.map((block, index) => {
         if (block.type === "numbered-list") {
           listCounter++;
@@ -644,6 +776,18 @@ export default function Editor() {
           onSelect={(cmd) => applySlashCommand(cmd.type)}
           onClose={() => setSlashMenu((s) => ({ ...s, open: false }))}
         />
+      )}
+
+      {slashMenu.open && slashMenu.query === "" && (
+         <div 
+           className="slash-filter-placeholder"
+           style={{
+             top: slashMenu.top,
+             left: slashMenu.x,
+           }}
+         >
+           Filter...
+         </div>
       )}
 
       {selection && !selection.isCollapsed && (
